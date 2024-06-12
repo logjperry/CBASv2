@@ -14,3 +14,6 @@ window.addEventListener('DOMContentLoaded', () => {
   })
 
 window.ipcRenderer = require('electron').ipcRenderer;
+window.storage = require('electron-json-storage');
+
+window.app = require('electron').remote.app;

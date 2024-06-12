@@ -16,23 +16,20 @@
         <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     </head>
 
-    <body>
+    <body class="bg-secondary">
         <script type="text/javascript" src="/eel.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
         <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r" crossorigin="anonymous"></script>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js" integrity="sha384-0pUGZvbkm6XF6gxjEnlmuGrJXVbNuzT9qBBavbLwCsOGabYfZo0T0to5eqruptLy" crossorigin="anonymous"></script>
   
-        <!-- <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <nav class="navbar navbar-expand-sm navbar-dark bg-tertiary">
             <div class="container-fluid">
-                <a class="navbar-brand" href="#">CBASv2</a>
+                <a class="navbar-brand" href="index.html">CBASv2</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav">
-                        <li class="nav-item">
-                            <a class="nav-link disabled" aria-current="page" href="#">Project</a>
-                        </li>
                         <li class="nav-item">
                             <a class="nav-link disabled" href="#">Record</a>
                         </li>
@@ -45,7 +42,7 @@
                     </ul>
                 </div>
             </div>
-        </nav> -->
+        </nav>
 
 
         <!-- Create/Open Project -->
@@ -65,21 +62,15 @@
                 </div>
 
                 <div class="card-body d-flex col align-items-center justify-content-center" style="padding: 1vw;">
-                    <h4 style="padding: 5vw;">
-                        TO BEGIN
-                    </h4>
-                    <button class="btn btn-outline-secondary" type="button" id="create">
-                        <h2>Create</h2>
+                    <button class="btn btn-outline-primary" type="button" id="create">
+                        <h2>Create a project</h2>
                     </button>
                     <h4 style="padding: 5vw;">
                         OR
                     </h4>
-                    <button class="btn btn-outline-secondary" type="button" id="open">
-                        <h2>Open</h2>
+                    <button class="btn btn-outline-primary" type="button" id="open">
+                        <h2>Open a project</h2>
                     </button>
-                    <h4 style="padding: 5vw;">
-                        A PROJECT
-                    </h4>
             
                 </div>
             </div>
@@ -94,13 +85,12 @@
                   <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                  <p id="parent-directory">Directory:</p>
-
-                  <input type="text" class="form-control" id="directory" aria-describedby="directory" placeholder="Project name...">
+                  <p>Parent Directory: </p><p id="parent-directory"></p>
+                  <input type="text" class="form-control" id="project-name" aria-describedby="directory" placeholder="Project name...">
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                  <button type="button" class="btn btn-primary">Create</button>
+                  <button type="button" class="btn btn-primary" onclick="createProject()">Create</button>
                 </div>
               </div>
             </div>
@@ -124,9 +114,11 @@
           </div>
 
         <script type="text/javascript">
-            
 
+
+            const storage = window.storage
             const ipc = window.ipcRenderer
+
             const createBtn = document.getElementById('create')
             const openBtn = document.getElementById('open')
 
@@ -147,15 +139,26 @@
                 if (mode == 0) {
                     let modal = new bootstrap.Modal(document.getElementById('createModal'))
 
-                    document.getElementById('parent-directory').innerHTML = 'Parent Directory: ' + dir
+                    document.getElementById('parent-directory').innerHTML = dir
 
                     modal.show()
                 } else {
-                    eel.project_exists(dir)().then(exists => {
-                        console.log(exists)
+                    eel.project_exists(dir)().then( function(data) {
+
+                        let exists = data[0]
+                        let project_dict = data[1]
 
                         if (exists) {
-                            console.log('Project exists!')
+                            const path = window.getPath("userData")
+                            const projectData = JSON.stringify({
+                                                    project:project_dict['project'], 
+                                                    cameras:project_dict['cameras'], 
+                                                    recordings:project_dict['recordings'],
+                                                    models:project_dict['models'],
+                                                    data_sets:project_dict['data_sets']
+                                                })
+                            fs.writeFile(`${path}/project-data.json`, projectData)
+                            window.open('./record.html', '_self');
                         } else {
                             let modal = new bootstrap.Modal(document.getElementById('errorModal'))
 
@@ -167,6 +170,38 @@
                 }
 
             });
+
+            function createProject() {
+                let parentDir = document.getElementById('parent-directory').innerHTML
+                let projectName = document.getElementById('project-name').value
+
+                // project dict - {'project':project, 'cameras':cameras, 'recordings':recordings, 'models':models, 'data_sets':data_sets}
+
+                eel.create_project(parentDir, projectName)().then(data => {
+                    
+                    let res = data[0]
+                    let project_dict = data[1]
+
+                    if (res) {
+
+                        const path = window.getPath("userData")
+                        const projectData = JSON.stringify({
+                                                project:project_dict['project'], 
+                                                cameras:project_dict['cameras'], 
+                                                recordings:project_dict['recordings'],
+                                                models:project_dict['models'],
+                                                data_sets:project_dict['data_sets']
+                                            })
+                        fs.writeFile(`${path}/project-data.json`, projectData)
+                        window.open('./record.html', '_self');
+                    } else {
+                        let modal = new bootstrap.Modal(document.getElementById('errorModal'))
+                        document.getElementById('error-message').innerHTML = 'Project could not be created. Check if the entered project already exists.'
+                        modal.show()
+                    }
+                })
+            }
+
 
 
         </script>

@@ -24,11 +24,11 @@ def project_exists(project_directory):
 
     if os.path.exists(project):
         if os.path.exists(cameras) and os.path.exists(recordings) and os.path.exists(models) and os.path.exists(data_sets):
-            return True
+            return True, {'project':project, 'cameras':cameras, 'recordings':recordings, 'models':models, 'data_sets':data_sets}
         else:
-            return False
+            return False, None
     else:
-        return False
+        return False, None
 
 @eel.expose
 def create_project(parent_directory, project_name):
@@ -44,7 +44,8 @@ def create_project(parent_directory, project_name):
 
     # check to see if the project already exists
     if os.path.exists(project):
-        raise Exception('Project already exists. Please choose a different name or location.')
+        print('Project already exists. Please choose a different name or location.')
+        return False, None
     else:
         print('Creating project...')
 
@@ -56,6 +57,8 @@ def create_project(parent_directory, project_name):
     os.mkdir(data_sets)
 
     print(f'Project creation successful!')
+
+    return True, {'project':project, 'cameras':cameras, 'recordings':recordings, 'models':models, 'data_sets':data_sets}
 
 @eel.expose
 def create_camera(camera_directory, name, rtsp_url, framerate=10, resolution=256, crop_left_x=0, crop_top_y=0, crop_width=1, crop_height=1):
