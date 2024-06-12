@@ -11,12 +11,30 @@ import shutil
 
 
 eel.init('frontend')
+eel.browsers.set_path('electron', 'node_modules/electron/dist/electron')
 
 @eel.expose
-def create_project(project_name, destination):
+def project_exists(project_directory):
+    project = project_directory
+
+    cameras = os.path.join(project, 'cameras')
+    recordings = os.path.join(project, 'recordings')
+    models = os.path.join(project, 'models')
+    data_sets = os.path.join(project, 'data_sets')
+
+    if os.path.exists(project):
+        if os.path.exists(cameras) and os.path.exists(recordings) and os.path.exists(models) and os.path.exists(data_sets):
+            return True
+        else:
+            return False
+    else:
+        return False
+
+@eel.expose
+def create_project(parent_directory, project_name):
 
     # main project directory
-    project = os.path.join(destination, project_name)
+    project = os.path.join(parent_directory, project_name)
 
     # make the names of the directories
     cameras = os.path.join(project, 'cameras')
@@ -138,4 +156,4 @@ def remove_camera(camera_directory, name):
     else:
         raise Exception('The camera does not exist. Please create the camera first before removing it.')
 
-eel.start('main.html')
+eel.start('frontend/index.html', mode='electron')
