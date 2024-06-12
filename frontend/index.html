@@ -115,8 +115,6 @@
 
         <script type="text/javascript">
 
-
-            const storage = window.storage
             const ipc = window.ipcRenderer
 
             const createBtn = document.getElementById('create')
@@ -133,49 +131,9 @@
                 ipc.send('open-file-dialog')
             });
 
-            //Getting back the information after selecting the file
-            ipc.on('selected-directory', function (event, dir) {
-                
-                if (mode == 0) {
-                    let modal = new bootstrap.Modal(document.getElementById('createModal'))
-
-                    document.getElementById('parent-directory').innerHTML = dir
-
-                    modal.show()
-                } else {
-                    eel.project_exists(dir)().then( function(data) {
-
-                        let exists = data[0]
-                        let project_dict = data[1]
-
-                        if (exists) {
-                            const path = window.getPath("userData")
-                            const projectData = JSON.stringify({
-                                                    project:project_dict['project'], 
-                                                    cameras:project_dict['cameras'], 
-                                                    recordings:project_dict['recordings'],
-                                                    models:project_dict['models'],
-                                                    data_sets:project_dict['data_sets']
-                                                })
-                            fs.writeFile(`${path}/project-data.json`, projectData)
-                            window.open('./record.html', '_self');
-                        } else {
-                            let modal = new bootstrap.Modal(document.getElementById('errorModal'))
-
-                            document.getElementById('error-message').innerHTML = 'Project does not exist.'
-
-                            modal.show()
-                        }
-                    })
-                }
-
-            });
-
-            function createProject() {
+            async function createProject() {
                 let parentDir = document.getElementById('parent-directory').innerHTML
                 let projectName = document.getElementById('project-name').value
-
-                // project dict - {'project':project, 'cameras':cameras, 'recordings':recordings, 'models':models, 'data_sets':data_sets}
 
                 eel.create_project(parentDir, projectName)().then(data => {
                     
@@ -183,16 +141,7 @@
                     let project_dict = data[1]
 
                     if (res) {
-
-                        const path = window.getPath("userData")
-                        const projectData = JSON.stringify({
-                                                project:project_dict['project'], 
-                                                cameras:project_dict['cameras'], 
-                                                recordings:project_dict['recordings'],
-                                                models:project_dict['models'],
-                                                data_sets:project_dict['data_sets']
-                                            })
-                        fs.writeFile(`${path}/project-data.json`, projectData)
+                        window.localStorage.setItem('project', JSON.stringify(project_dict))
                         window.open('./record.html', '_self');
                     } else {
                         let modal = new bootstrap.Modal(document.getElementById('errorModal'))
@@ -202,6 +151,41 @@
                 })
             }
 
+
+            //Getting back the information after selecting the file
+            ipc.on('selected-directory', function (event, dir) {
+
+                if (dir == null) {
+                    return
+                }
+
+                if (mode == 0) {
+
+                    // show modal to name project
+                    let modal = new bootstrap.Modal(document.getElementById('createModal'))
+                    document.getElementById('parent-directory').innerHTML = dir
+                    modal.show()
+
+                } else {
+                    eel.project_exists(dir)().then( function(data) {
+
+                        let exists = data[0]
+                        let project_dict = data[1]
+
+                        if (exists) {
+                            window.localStorage.setItem('project', JSON.stringify(project_dict))
+                            window.open('./record.html', '_self');
+                        } else {
+
+                            // show error modal
+                            let modal = new bootstrap.Modal(document.getElementById('errorModal'))
+                            document.getElementById('error-message').innerHTML = 'Project does not exist.'
+                            modal.show()
+                        }
+                    })
+                }
+
+            });
 
 
         </script>

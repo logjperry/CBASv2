@@ -48,6 +48,8 @@ app.on('window-all-closed', () => {
 
 const ipc = require('electron').ipcMain
 const dialog = require('electron').dialog
+const storage = require('electron-json-storage');
+
 ipc.on('open-file-dialog', async function (event) {
 
     let directory = await dialog.showOpenDialog({
@@ -60,3 +62,26 @@ ipc.on('open-file-dialog', async function (event) {
         event.sender.send('selected-directory', directory['filePaths'][0])
     }
 })
+
+ipc.on('store-project', async function (event, data) {
+
+    console.log(data)
+    try{
+      await storage.set('project', data)
+      event.sender.send('project-stored')
+    } catch (err) {
+      event.sender.send('storage-error')
+    }
+
+})
+
+ipc.on('get-project', async function (event) {
+  
+      try {
+        let project = await storage.get('project')
+        event.sender.send('project-retrieved', project)
+      } catch (err) {
+        event.sender.send('storage-error')
+      }
+  
+  })
