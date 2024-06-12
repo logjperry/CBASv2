@@ -5,6 +5,7 @@
 
         <script type="text/javascript" src="/eel.js"></script>
 
+        <link rel="stylesheet" href="index.css">
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
@@ -39,26 +40,26 @@
             </div>
         </nav>
 
-        <div class="container">
-          <div class="row align-items-center justify-content-center" id="camera-container">
+        <div class="container align-items-center justify-content-center">
+          <div class="row" id="camera-container">
             
           </div>
         </div>
 
-        <div class="modal" tabindex="-1" id="createModal">
+        <div class="modal" tabindex="-1" id="addCamera">
             <div class="modal-dialog modal-dialog-centered">
               <div class="modal-content">
                 <div class="modal-header">
-                  <h5 class="modal-title">Create Project</h5>
+                  <h5 class="modal-title">Add Camera</h5>
                   <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                  <p>Parent Directory: </p><p id="parent-directory"></p>
-                  <input type="text" class="form-control" id="project-name" aria-describedby="directory" placeholder="Project name...">
+                  <p>RTSP URL: </p>
+                  <input type="text" class="form-control" id="rtsp-url" aria-describedby="directory" placeholder="RTSP URL...">
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                  <button type="button" class="btn btn-primary" onclick="createProject()">Create</button>
+                  <button type="button" class="btn btn-primary" onclick="addCamera()">Add</button>
                 </div>
               </div>
             </div>
@@ -81,6 +82,23 @@
             </div>
           </div>
 
+          <!-- Add camera button -->
+          <div class="fab-container">
+            <div class="fab shadow">
+              <div class="fab-content" onclick="addCamera()">
+                <i class="bi bi-plus-lg h1" style="color:white;"></i>
+              </div>
+            </div>
+            <div class="sub-button1 shadow" onclick="recordAll()">
+                <i class="bi bi-camera-reels h3" style="color:white; padding-left:2px; padding-top:2px"></i>
+            </div>
+            <div class="sub-button1 shadow" onclick="stopAll()">
+                <i class="bi bi-app h3" style="color:white; padding-right:1px; padding-top:4px"></i>
+            </div>
+          </div>
+        
+        
+
         <script type="text/javascript">
 
           const ipc = window.ipcRenderer
@@ -94,28 +112,54 @@
           function load_cameras() {
             let container = document.getElementById('camera-container')
 
+            let num_cameras = 1
+
             let connection = `
-              <div class="card-body d-flex justify-content-center align-items-center" style="width: 300px; height: 200px;">
-                <img src="./assets/noConnection.png" class="card-img">
+              <div class="card-body d-flex justify-content-center align-items-center bg-light" style="width: 300px; height: 200px; padding: 0px; margin:0px">
+                <img src="./assets/noConnection.png" style="min-width:100%; min-height:100%">
               </div> 
             `
             let nconnection = `
-              <div class="card-body d-flex justify-content-center align-items-center bg-light" style="width: 300px; height: 200px;">
+              <div class="card-body d-flex justify-content-center align-items-center bg-light" style="width: 300px; height: 200px; padding: 0px; margin:0px">
                 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" fill="gray" class="bi bi-camera-video-off" viewBox="0 0 16 16">
                   <path fill-rule="evenodd" d="M10.961 12.365a2 2 0 0 0 .522-1.103l3.11 1.382A1 1 0 0 0 16 11.731V4.269a1 1 0 0 0-1.406-.913l-3.111 1.382A2 2 0 0 0 9.5 3H4.272l.714 1H9.5a1 1 0 0 1 1 1v6a1 1 0 0 1-.144.518zM1.428 4.18A1 1 0 0 0 1 5v6a1 1 0 0 0 1 1h5.014l.714 1H2a2 2 0 0 1-2-2V5c0-.675.334-1.272.847-1.634zM15 11.73l-3.5-1.555v-4.35L15 4.269zm-4.407 3.56-10-14 .814-.58 10 14z"/>
                 </svg>
               </div>
             `
 
-            for (i = 0; i < 8; i++) {
+            for (i = 0; i < num_cameras; i++) {
               container.innerHTML += `
             <div class="col-auto"">
-              <div class="card text-white bg-dark mb-3" style="width: max-content; padding-left: 1vw; padding-right: 1vw; padding-bottom: 1vw;">
+              <div class="card shadow text-white bg-dark mb-3" style="width: max-content; padding-left: 5px; padding-right: 5px; padding-bottom: 5px;">
                 <div class="card-header">
                   <h1 class="display-6">Card title</h1>
-                </div>` + nconnection +`</div>
+                </div>` + connection +`
+                <div class="btn rounded position-absolute bottom-0 end-0 bg-dark d-flex align-items-center justify-content-center" style="margin-bottom:9px;margin-right:15px; width: 40px; height: 40px">
+                    <i class="bi bi-camera-reels h4" style="color:white; padding-left:2px; padding-top:2px"></i>
+                </div>
+                <div class="btn rounded position-absolute bottom-0 end-0 bg-dark d-flex align-items-center justify-content-center" style="margin-bottom:9px;margin-right:60px; width: 40px; height: 40px">
+                    <i class="bi bi-crop h4" style="color:white; padding-top:2px; padding-right:2px"></i>
+                </div>
+                <div>
+              </div>
             </div>`
             }
+          }
+
+          function addCamera() {
+            
+          }
+
+          function removeCamera() {
+            
+          }
+
+          function recordAll() {
+            
+          }
+
+          function stopAll() {
+            
           }
 
 
