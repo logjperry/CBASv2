@@ -47,61 +47,66 @@
         </div>
 
         <div class="modal" tabindex="-1" id="addCamera">
-            <div class="modal-dialog modal-dialog-centered">
-              <div class="modal-content">
-                <div class="modal-header">
-                  <h5 class="modal-title">Add Camera</h5>
-                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                  <p>RTSP URL: </p>
-                  <input type="text" class="form-control" id="rtsp-url" aria-describedby="directory" placeholder="RTSP URL...">
-                </div>
-                <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                  <button type="button" class="btn btn-primary" onclick="addCamera()">Add</button>
-                </div>
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Add Camera</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <p>Camera Name: </p>
+                <input type="text" class="form-control" id="camera-name" aria-describedby="directory" placeholder="e.g. cam1" style="margin-bottom: 10px">
+                <p>RTSP URL: </p>
+                <input type="text" class="form-control" id="rtsp-url" aria-describedby="directory" placeholder="e.g. rtsp://admin:password@192.168.1.2:8554/profile0">
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="addCamera()">Add</button>
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="modal" tabindex="-1" id="errorModal">
-            <div class="modal-dialog modal-dialog-centered">
-              <div class="modal-content">
-                <div class="modal-header">
-                  <h5 class="modal-title">Error!</h5>
-                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                  <p id="error-message"></p>
-                </div>
-                <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
+        <div class="modal" tabindex="-1" id="errorModal">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Error!</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <p id="error-message"></p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
               </div>
             </div>
           </div>
+        </div>
 
-          <!-- Add camera button -->
-          <div class="fab-container">
-            <div class="fab shadow">
-              <div class="fab-content" onclick="addCamera()">
-                <i class="bi bi-plus-lg h1" style="color:white;"></i>
-              </div>
-            </div>
-            <div class="sub-button1 shadow" onclick="recordAll()">
-                <i class="bi bi-camera-reels h3" style="color:white; padding-left:2px; padding-top:2px"></i>
-            </div>
-            <div class="sub-button1 shadow" onclick="stopAll()">
-                <i class="bi bi-app h3" style="color:white; padding-right:1px; padding-top:4px"></i>
+        <!-- Add camera button -->
+        <div class="fab-container">
+          <div class="fab shadow">
+            <div class="fab-content" onclick="showCameraModal()">
+              <i class="bi bi-plus-lg h1" style="color:white;"></i>
             </div>
           </div>
+          <div class="sub-button1 shadow" onclick="recordAll()">
+              <i class="bi bi-camera-reels h3" style="color:white; padding-left:2px; padding-top:2px"></i>
+          </div>
+          <div class="sub-button1 shadow" onclick="stopAll()">
+              <i class="bi bi-app h3" style="color:white; padding-right:1px; padding-top:4px"></i>
+          </div>
+        </div>
         
         
 
+        <script type="text/javascript" src="/eel.js"></script>
         <script type="text/javascript">
 
           const ipc = window.ipcRenderer
+
+          let cameraModal = new bootstrap.Modal(document.getElementById('addCamera'))
 
           function read(attr) {
             let project_string = window.localStorage.getItem('project')
@@ -111,6 +116,13 @@
 
           function load_cameras() {
             let container = document.getElementById('camera-container')
+
+            let cameras = read('cameras')
+
+
+            eel.ping_cameras(read('cameras'))().then( function(data) {
+
+            })
 
             let num_cameras = 1
 
@@ -146,7 +158,52 @@
             }
           }
 
+          function showCameraModal() {
+            cameraModal.show()
+          }
+
           function addCamera() {
+            let name = document.getElementById('camera-name').value
+            let rtsp = document.getElementById('rtsp-url').value
+
+            if (name == '' || rtsp == '') {
+              document.getElementById('error-message').innerText = 'Please fill in all fields.'
+              let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+              errorModal.show()
+              return
+            } else {
+                let cam_dir = read('cameras')
+
+                eel.create_camera(cam_dir, name, rtsp)(function(ret) {
+
+                    let res = ret[0]
+                    let name = ret[1]
+                    let frame = ret[2]
+
+                    if (res) {
+
+                        let camera_dict = window.localStorage.getItem('camera_dict')
+
+                        if (camera_dict == null) {
+                            camera_dict = {}
+                        } else {
+                            camera_dict = JSON.parse(camera_dict)
+                        }
+
+                        console.log(camera_dict)
+
+                        camera_dict[name] = frame
+                        window.localStorage.setItem('camera/'+name, JSON.stringify(camera_dict))
+                        
+                        cameraModal.hide()
+                        cameraModal = new bootstrap.Modal(document.getElementById('addCamera'))
+                    } else {
+                        document.getElementById('error-message').innerText = ret
+                        let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                        errorModal.show()
+                    }
+                })
+            }
             
           }
 
@@ -162,8 +219,9 @@
             
           }
 
-
-          load_cameras();
+          setTimeout(function (){
+            load_cameras();
+          }, 1000);
 
                 
         </script>

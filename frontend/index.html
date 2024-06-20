@@ -139,10 +139,12 @@
 
                 eel.create_project(parentDir, projectName)().then(data => {
                     
-                    let res = data[0]
-                    let project_dict = data[1]
+                    let exists = data[0]
+                    let dict = data[1]
 
-                    if (res) {
+                    if (exists) {
+                        let project_dict = dict
+                        console.log(project_dict)
                         window.localStorage.setItem('project', JSON.stringify(project_dict))
                         window.open('./record.html', '_self');
                     } else {
@@ -172,13 +174,14 @@
                     eel.project_exists(dir)().then( function(data) {
 
                         let exists = data[0]
-                        let project_dict = data[1]
+                        let dict = data[1]
 
                         if (exists) {
+                            let project_dict = dict
+                            console.log(project_dict)
                             window.localStorage.setItem('project', JSON.stringify(project_dict))
                             window.open('./record.html', '_self');
                         } else {
-
                             // show error modal
                             let modal = new bootstrap.Modal(document.getElementById('errorModal'))
                             document.getElementById('error-message').innerHTML = 'Project does not exist.'

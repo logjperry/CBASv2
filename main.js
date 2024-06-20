@@ -4,6 +4,7 @@
 const { app, BrowserWindow } = require('electron')
 const path = require('node:path')
 
+
 const createWindow = () => {
     // Create the browser window.
     const mainWindow = new BrowserWindow({
@@ -28,6 +29,7 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+
   createWindow()
 
   app.on('activate', () => {
@@ -63,25 +65,3 @@ ipc.on('open-file-dialog', async function (event) {
     }
 })
 
-ipc.on('store-project', async function (event, data) {
-
-    console.log(data)
-    try{
-      await storage.set('project', data)
-      event.sender.send('project-stored')
-    } catch (err) {
-      event.sender.send('storage-error')
-    }
-
-})
-
-ipc.on('get-project', async function (event) {
-  
-      try {
-        let project = await storage.get('project')
-        event.sender.send('project-retrieved', project)
-      } catch (err) {
-        event.sender.send('storage-error')
-      }
-  
-  })

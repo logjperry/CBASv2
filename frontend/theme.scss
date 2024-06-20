@@ -14,10 +14,10 @@ $primary: rgb(75, 162, 255);
     cursor: pointer;
     
     .sub-button1:nth-child(2) {
-      transform: translateX(-80px);
+      transform: translateY(-80px);
     }
     .sub-button1:nth-child(3) {
-        transform: translateX(-140px);
+        transform: translateY(-140px);
     }
   }
   .fab {

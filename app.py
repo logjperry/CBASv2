@@ -61,6 +61,38 @@ def create_project(parent_directory, project_name):
     return True, {'project':project, 'cameras':cameras, 'recordings':recordings, 'models':models, 'data_sets':data_sets}
 
 @eel.expose
+def ping_cameras(camera_directory):
+    names = []
+    
+    cameras = {}
+
+    for camera in os.listdir(camera_directory):
+        if os.path.isdir(os.path.join(camera_directory, camera)):
+            config = os.path.join(camera_directory, camera, 'config.yaml')
+
+            with open(config, 'r') as file:
+                cconfig = yaml.safe_load(file)
+
+            names.append(cconfig['name'])
+
+            print(f'Loading camera: {cconfig["name"]} at {cconfig["rtsp_url"]}...')
+            
+            rtsp_url = cconfig['rtsp_url']
+
+            frame_location = os.path.join(camera_directory, camera, 'frame.jpg')
+
+            command = f"ffmpeg -loglevel panic  -rtsp_transport tcp -i {rtsp_url} -vf \"select=eq(n\,34)\" -vframes 1 -y {frame_location}"
+
+            subprocess.Popen(command, shell=True)
+
+            print(f'Finished loading camera: {cconfig["name"]} at {cconfig["rtsp_url"]}...')
+
+            cameras[camera] = frame_location
+
+
+    return names, cameras
+
+@eel.expose
 def create_camera(camera_directory, name, rtsp_url, framerate=10, resolution=256, crop_left_x=0, crop_top_y=0, crop_width=1, crop_height=1):
     
     # set up a folder for the camera
@@ -84,6 +116,8 @@ def create_camera(camera_directory, name, rtsp_url, framerate=10, resolution=256
     # save the camera config
     with open(os.path.join(camera, 'config.yaml'), 'w+') as file:
         yaml.dump(camera_config, file, allow_unicode=True)
+
+    return True, name, camera_config
 
 @eel.expose
 def update_camera(camera_directory, name, rtsp_url, framerate=10, resolution=256, crop_left_x=0, crop_top_y=0, crop_width=1, crop_height=1):
