@@ -30,15 +30,14 @@
                             <a class="nav-link text-white" href="record.html">Record</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="label.html">Label</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="train.html">Train</a>
+                            <a class="nav-link disabled" href="label.html">Label/Train</a>
                         </li>
                     </ul>
                 </div>
             </div>
         </nav>
+
+
 
         <div class="container align-items-center justify-content-center">
           <div class="row" id="camera-container">
@@ -84,144 +83,415 @@
           </div>
         </div>
 
+        
+        <div class="modal" tabindex="-1" id="cameraSettings">
+            <div class="modal-dialog modal-dialog-centered d-flex justify-content-center align-items-center">
+              <div class="modal-content"  style="width:800px">
+                <div class="modal-header">
+                  <h5 class="modal-title">Camera Settings</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <canvas id="camera-image" width="600px" height="300px"></canvas>
+                    <p>Camera Name: </p>
+                    <input type="text" class="form-control" id="cs-name" aria-describedby="directory" placeholder="e.g. cam1" style="margin-bottom: 10px">
+                    <p>RTSP URL: </p>
+                    <input type="text" class="form-control" id="cs-url" aria-describedby="directory" placeholder="e.g. rtsp://admin:password@192.168.1.2:8554/profile0" style="margin-bottom: 20px">
+                    
+                    <div class="container">
+                        <div class="row justify-content-center align-items-center g-2">
+                            <div class="col">
+                                <p>Framerate: </p>
+                                <input type="number" class="form-control" id="cs-framerate" aria-describedby="directory" placeholder="10">
+                            </div>
+                            <div class="col">
+                                <p>Crop X: </p>
+                                <input type="number" class="form-control" id="cs-cropx" aria-describedby="directory" placeholder="0" step=".01" min="0" max="1">
+                            </div>
+                            <div class="col">
+                                <p>Crop Width: </p>
+                                <input type="number" class="form-control" id="cs-crop-width" aria-describedby="directory" placeholder="1" step=".01" min="0" max="1">
+                            </div>
+                        </div>
+                        <div class="row justify-content-center align-items-center g-2">
+                            <div class="col">
+                                <p>Resolution: </p>
+                                <input type="number" class="form-control" id="cs-resolution" aria-describedby="directory" placeholder="256">
+                            </div>
+                            <div class="col">
+                                <p>Crop Y: </p>
+                                <input type="number" class="form-control" id="cs-cropy" aria-describedby="directory" placeholder="0" step=".01" min="0" max="1">
+                            </div>
+                            <div class="col">
+                                <p>Crop Height: </p>
+                                <input type="number" class="form-control" id="cs-crop-height" aria-describedby="directory" placeholder="1" step=".01" min="0" max="1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="saveCS()">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
         <!-- Add camera button -->
         <div class="fab-container">
           <div class="fab shadow">
             <div class="fab-content" onclick="showCameraModal()">
-              <i class="bi bi-plus-lg h1" style="color:white;"></i>
+              <i class="bi bi-plus-lg" style="color:white; font-size:50px;"></i>
             </div>
           </div>
           <div class="sub-button1 shadow" onclick="recordAll()">
-              <i class="bi bi-camera-reels h3" style="color:white; padding-left:2px; padding-top:2px"></i>
+              <i class="bi bi-camera-video-fill" style="color:white; font-size:25px;"></i>
           </div>
           <div class="sub-button1 shadow" onclick="stopAll()">
-              <i class="bi bi-app h3" style="color:white; padding-right:1px; padding-top:4px"></i>
+              <i class="bi bi-square-fill" style="color:white; font-size:25px;"></i>
           </div>
         </div>
-        
-        
+
+        <div class="fab-container-refresh">
+            <div class="fab shadow">
+              <div class="fab-content" onclick="update_cameras()">
+                <i class="bi bi-arrow-clockwise" style="color:white; font-size:50px;"></i>
+              </div>
+            </div>
+        </div>
+
+        <div id="cover-spin"></div>
 
         <script type="text/javascript" src="/eel.js"></script>
         <script type="text/javascript">
 
-          const ipc = window.ipcRenderer
+            const ipc = window.ipcRenderer
 
-          let cameraModal = new bootstrap.Modal(document.getElementById('addCamera'))
+            let loaded = false
 
-          function read(attr) {
-            let project_string = window.localStorage.getItem('project')
-            let project = JSON.parse(project_string)
-            return project[attr]
-          }
+            let cameraModal = new bootstrap.Modal(document.getElementById('addCamera'))
 
-          function load_cameras() {
-            let container = document.getElementById('camera-container')
-
-            let cameras = read('cameras')
-
-
-            eel.ping_cameras(read('cameras'))().then( function(data) {
-
-            })
-
-            let num_cameras = 1
-
-            let connection = `
-              <div class="card-body d-flex justify-content-center align-items-center bg-light" style="width: 300px; height: 200px; padding: 0px; margin:0px">
-                <img src="./assets/noConnection.png" style="min-width:100%; min-height:100%">
-              </div> 
-            `
-            let nconnection = `
-              <div class="card-body d-flex justify-content-center align-items-center bg-light" style="width: 300px; height: 200px; padding: 0px; margin:0px">
-                <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" fill="gray" class="bi bi-camera-video-off" viewBox="0 0 16 16">
-                  <path fill-rule="evenodd" d="M10.961 12.365a2 2 0 0 0 .522-1.103l3.11 1.382A1 1 0 0 0 16 11.731V4.269a1 1 0 0 0-1.406-.913l-3.111 1.382A2 2 0 0 0 9.5 3H4.272l.714 1H9.5a1 1 0 0 1 1 1v6a1 1 0 0 1-.144.518zM1.428 4.18A1 1 0 0 0 1 5v6a1 1 0 0 0 1 1h5.014l.714 1H2a2 2 0 0 1-2-2V5c0-.675.334-1.272.847-1.634zM15 11.73l-3.5-1.555v-4.35L15 4.269zm-4.407 3.56-10-14 .814-.58 10 14z"/>
-                </svg>
-              </div>
-            `
-
-            for (i = 0; i < num_cameras; i++) {
-              container.innerHTML += `
-            <div class="col-auto"">
-              <div class="card shadow text-white bg-dark mb-3" style="width: max-content; padding-left: 5px; padding-right: 5px; padding-bottom: 5px;">
-                <div class="card-header">
-                  <h1 class="display-6">Card title</h1>
-                </div>` + connection +`
-                <div class="btn rounded position-absolute bottom-0 end-0 bg-dark d-flex align-items-center justify-content-center" style="margin-bottom:9px;margin-right:15px; width: 40px; height: 40px">
-                    <i class="bi bi-camera-reels h4" style="color:white; padding-left:2px; padding-top:2px"></i>
-                </div>
-                <div class="btn rounded position-absolute bottom-0 end-0 bg-dark d-flex align-items-center justify-content-center" style="margin-bottom:9px;margin-right:60px; width: 40px; height: 40px">
-                    <i class="bi bi-crop h4" style="color:white; padding-top:2px; padding-right:2px"></i>
-                </div>
-                <div>
-              </div>
-            </div>`
+            function read(attr) {
+                let project_string = window.localStorage.getItem('project')
+                let project = JSON.parse(project_string)
+                return project[attr]
             }
-          }
 
-          function showCameraModal() {
-            cameraModal.show()
-          }
+            function load_initial() {
+                eel.camera_names(read('cameras'))().then( function(data) {
+                    let container = document.getElementById('camera-container')
 
-          function addCamera() {
-            let name = document.getElementById('camera-name').value
-            let rtsp = document.getElementById('rtsp-url').value
+                    container.innerHTML = ""
 
-            if (name == '' || rtsp == '') {
-              document.getElementById('error-message').innerText = 'Please fill in all fields.'
-              let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
-              errorModal.show()
-              return
-            } else {
-                let cam_dir = read('cameras')
+                    let locations = data
 
-                eel.create_camera(cam_dir, name, rtsp)(function(ret) {
+                    let num_cameras = locations.length
 
-                    let res = ret[0]
-                    let name = ret[1]
-                    let frame = ret[2]
+                    for (i = 0; i < num_cameras; i++) {
+                        name = locations[i]
+                        container.innerHTML += `
+                        <div class="col-auto"">
+                            <div class="card shadow text-white bg-dark mb-3" style="width: max-content; padding-left: 5px; padding-right: 5px; padding-bottom: 5px;">
+                                <div class="card-header">
+                                    <h1 class="display-6">` + name +`</h1>
+                                </div>
+                        ` + `
+                                <img  id="camera-` + name +`" src="assets/noConnection.png" class="card-body d-flex justify-content-center align-items-center bg-light" style="width: 300px; height: 200px; padding: 0px; margin:0px"/>   
+                        ` + `
+                                <div id="before-recording-` + name +`" style="visibility: visible;">
+                                    <div class="btn rounded position-absolute bottom-0 end-0 bg-dark d-flex align-items-center justify-content-center" onclick="recordCamera('` + name +`','')" style="margin-bottom:9px;margin-right:15px; width: 40px; height: 40px">
+                                        <i class="bi bi-camera-video-fill" style="color:white; font-size:20px;"></i>
+                                    </div>
+                                    <div class="btn rounded position-absolute bottom-0 end-0 bg-dark d-flex align-items-center justify-content-center" onclick="cameraSettings('` + name +`')" style="margin-bottom:9px;margin-right:60px; width: 40px; height: 40px">
+                                        <i class="bi bi-crop" style="color:white; font-size:20px;"></i>
+                                    </div>
+                                </div>
+                                <div id="during-recording-` + name +`" style="visibility: hidden;">
+                                    <div class="btn rounded position-absolute bottom-0 end-0 bg-dark d-flex align-items-center justify-content-center" onclick="stopRecording('` + name +`','')" style="margin-bottom:9px;margin-right:15px; width: 40px; height: 40px">
+                                        <i class="bi bi-square-fill" style="color:white; font-size:20px;"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`
+                    }
+                    
+                })
+            }
 
-                    if (res) {
+            eel.expose(updateImageSrc);
+            function updateImageSrc(name, val) {
+                let elem = document.getElementById('camera-'+name);
+                elem.src = "data:image/jpeg;base64, " + val
+            }
 
-                        let camera_dict = window.localStorage.getItem('camera_dict')
+            function load_cameras() {
+                
+                load_initial();
 
-                        if (camera_dict == null) {
-                            camera_dict = {}
+                eel.ping_cameras(read('cameras'))().then( function(data) {
+                    console.log('pinging cameras...')
+                })
+
+                let cover = document.getElementById('cover-spin')
+                cover.style.visibility = 'visible'
+
+                setTimeout(function (){
+                    eel.update_camera_frames(read('cameras'))()
+                    cover.style.visibility = 'hidden'
+                }, 5000);
+
+
+            }
+
+            function update_cameras() {
+
+                eel.ping_cameras(read('cameras'))().then( function(data) {
+                    console.log('pinging cameras...')
+                })
+                
+                let cover = document.getElementById('cover-spin')
+                cover.style.visibility = 'visible'
+
+                setTimeout(function (){
+                    eel.update_camera_frames(read('cameras'))()
+                    cover.style.visibility = 'hidden'
+                }, 5000);
+
+            }
+
+            function drawImageScaled(img, ctx, sx, sy, sw, sh, resolution) {
+                var canvas = ctx.canvas;
+                var hRatio = canvas.width  / sw;
+                var vRatio =  canvas.height / sh;
+                var ratio  = Math.min ( hRatio, vRatio );
+                var centerShift_x = ( canvas.width - resolution ) / 2;
+                var centerShift_y = ( canvas.height - resolution ) / 2;  
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, sx, sy, sw, sh, centerShift_x, centerShift_y, resolution, resolution);  
+            }
+
+            function cameraSettings(camera_name) {
+                var canvas = document.getElementById("camera-image");
+                var ctx = canvas.getContext("2d");
+
+                eel.get_cam_settings(read('cameras'), camera_name)(function (res){
+                    if(res) {
+
+                        name = res['name']
+                        url = res['rtsp_url']
+                        framerate = res['framerate']
+                        resolution = res['resolution']
+                        cx = res['crop_left_x']
+                        cy = res['crop_top_y']
+                        cw = res['crop_width']
+                        ch = res['crop_height']
+
+                        document.getElementById('cs-name').value = name
+                        document.getElementById('cs-url').value = url 
+                        document.getElementById('cs-framerate').value = framerate 
+                        document.getElementById('cs-resolution').value = resolution
+                        document.getElementById('cs-cropx').value = cx
+                        document.getElementById('cs-cropy').value = cy
+                        document.getElementById('cs-crop-width').value = cw
+                        document.getElementById('cs-crop-height').value = ch
+
+                        document.getElementById('cs-resolution').onchange = drawBounds
+
+                        document.getElementById('cs-cropx').onchange = drawBounds
+                        document.getElementById('cs-cropy').onchange = drawBounds
+                        document.getElementById('cs-crop-width').onchange = drawBounds
+                        document.getElementById('cs-crop-height').onchange = drawBounds
+                        
+
+                        var image = new Image();
+                        image.src = document.getElementById('camera-'+camera_name).src
+
+                        function drawBounds() {
+                            ctx.clearRect(0, 0, image.width, image.height)
+                            
+                            if(document.getElementById('cs-crop-width').value > 1-document.getElementById('cs-cropx').value) {
+                                document.getElementById('cs-crop-width').value = 1-document.getElementById('cs-cropx').value
+                            }
+
+                            if(document.getElementById('cs-crop-height').value > 1-document.getElementById('cs-cropy').value) {
+                                document.getElementById('cs-crop-height').value = 1-document.getElementById('cs-cropy').value
+                            }
+
+                            resolution = document.getElementById('cs-resolution').value
+                            
+                            x = document.getElementById('cs-cropx').value * image.width
+                            y = document.getElementById('cs-cropy').value * image.height
+                            w = document.getElementById('cs-crop-width').value * image.width
+                            h = document.getElementById('cs-crop-height').value * image.height
+
+                            drawImageScaled(image, ctx, x, y, w, h, resolution);
+
+                        }
+                        
+                        image.onload = function() {
+                            drawBounds();
+                        };
+
+
+                        let modal = new bootstrap.Modal(document.getElementById('cameraSettings'))
+                        modal.show()
+                    }
+                })
+                
+            }
+
+            function saveCS() {
+                name = document.getElementById('cs-name').value
+                url = document.getElementById('cs-url').value
+                framerate = document.getElementById('cs-framerate').value 
+                resolution = document.getElementById('cs-resolution').value
+                cx = document.getElementById('cs-cropx').value
+                cy = document.getElementById('cs-cropy').value
+                cw = document.getElementById('cs-crop-width').value
+                ch = document.getElementById('cs-crop-height').value
+
+                eel.update_camera(read('cameras'), name, url, framerate, resolution, cx, cy, cw, ch)
+
+                load_cameras()
+            }
+
+            function showCameraModal() {
+                cameraModal.show()
+            }
+
+            function addCamera() {
+                let name = document.getElementById('camera-name').value
+                let rtsp = document.getElementById('rtsp-url').value
+
+                if (name == '' || rtsp == '') {
+                document.getElementById('error-message').innerText = 'Please fill in all fields.'
+                let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                errorModal.show()
+                return
+                } else {
+                    let cam_dir = read('cameras')
+
+                    eel.create_camera(cam_dir, name, rtsp)(function(ret) {
+
+                        let res = ret[0]
+                        let name = ret[1]
+                        let frame = ret[2]
+
+                        if (res) {
+
+                            let camera_dict = window.localStorage.getItem('camera_dict')
+
+                            if (camera_dict == null) {
+                                camera_dict = {}
+                            } else {
+                                camera_dict = JSON.parse(camera_dict)
+                            }
+
+                            console.log(camera_dict)
+
+                            camera_dict[name] = frame
+                            window.localStorage.setItem('camera/'+name, JSON.stringify(camera_dict))
+                            
+                            cameraModal.hide()
+                            cameraModal = new bootstrap.Modal(document.getElementById('addCamera'))
                         } else {
-                            camera_dict = JSON.parse(camera_dict)
+                            document.getElementById('error-message').innerText = ret
+                            let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                            errorModal.show()
+                        }
+                    })
+
+                    load_cameras();
+                }
+                
+            }
+
+            function removeCamera() {
+                
+            }
+
+            function recordCamera(camera_name, dest) {
+                if(dest==='') {
+
+                    eel.make_recording_dir(read('recordings'), dest, camera_name)(function (dir){
+                        if(dir) {
+                            eel.start_camera_stream(read('cameras'), camera_name, dir, 600)(function (res){
+                                if(res) {
+                                    let buttons = document.getElementById('before-recording-'+camera_name)
+                                    buttons.style.visibility = 'hidden';
+                                    
+                                    buttons = document.getElementById('during-recording-'+camera_name)
+                                    buttons.style.visibility = 'visible';
+                                } else {
+                                    document.getElementById('error-message').innerText = camera_name+' is already being recorded.'
+                                    let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                                    errorModal.show()
+                                }
+                            })
+                        } else {
+                            document.getElementById('error-message').innerText = 'Error, could not create a recording directory.'
+                            let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                            errorModal.show()
                         }
 
-                        console.log(camera_dict)
+                    })
 
-                        camera_dict[name] = frame
-                        window.localStorage.setItem('camera/'+name, JSON.stringify(camera_dict))
+                } else {
+                    document.getElementById('error-message').innerText = 'Error, could not start recording.'
+                    let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                    errorModal.show()
+                }
+            }
+
+            function stopRecording(camera_name) {
+                eel.stop_camera_stream(camera_name)(function (res){
+                    if(res) {
+                        let buttons = document.getElementById('during-recording-'+camera_name)
+                        buttons.style.visibility = 'hidden';
                         
-                        cameraModal.hide()
-                        cameraModal = new bootstrap.Modal(document.getElementById('addCamera'))
+                        buttons = document.getElementById('before-recording-'+camera_name)
+                        buttons.style.visibility = 'visible';
                     } else {
-                        document.getElementById('error-message').innerText = ret
+                        document.getElementById('error-message').innerText = 'Error, could not stop recording.'
                         let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
                         errorModal.show()
                     }
                 })
+
             }
-            
-          }
 
-          function removeCamera() {
-            
-          }
+            function recordAll() {
+                
+                eel.camera_names(read('cameras'))(function (names) {
+                    for (i = 0; i < names.length; i++) {
+                        recordCamera(names[i], '')
+                    }
+                })
 
-          function recordAll() {
-            
-          }
+                
+            }
 
-          function stopAll() {
-            
-          }
+            function stopAll() {
 
-          setTimeout(function (){
-            load_cameras();
-          }, 1000);
+                eel.camera_names(read('cameras'))(function (names) {
+                    for (i = 0; i < names.length; i++) {
+                        stopRecording(names[i])
+                    }
+                })
+
+            }
+
+            setTimeout(function (){
+                load_cameras();
+            }, 1000);
+
+            window.addEventListener("unload", function(e){
+                eel.kill_streams();
+            });
+
+            setInterval(function (){
+                eel.update_camera_frames(read('cameras'))
+            }, 2000)
+                        
 
                 
         </script>
