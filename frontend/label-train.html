@@ -5,6 +5,7 @@
 
         <script type="text/javascript" src="/eel.js"></script>
 
+        <link rel="stylesheet" href="index.css">
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
@@ -17,7 +18,7 @@
         <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r" crossorigin="anonymous"></script>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js" integrity="sha384-0pUGZvbkm6XF6gxjEnlmuGrJXVbNuzT9qBBavbLwCsOGabYfZo0T0to5eqruptLy" crossorigin="anonymous"></script>
   
-        <nav class="navbar navbar-expand-sm navbar-dark bg-tertiary">
+        <nav class="navbar navbar-expand-sm navbar-dark bg-tertiary" style="padding-bottom:50px">
             <div class="container-fluid">
                 <a class="navbar-brand" href="index.html">CBASv2</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
@@ -25,15 +26,12 @@
                 </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav">
-                        <li class="nav-item">
-                            <a class="nav-link" href="record.html">Record</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="label.html">Label</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="train.html">Train</a>
-                        </li>
+                      <li class="nav-item">
+                          <button class="nav-link" onclick="routeRecord()">Record</button>
+                      </li>
+                      <li class="nav-item">
+                          <button class="nav-link text-white" onclick="routeLabelTrain()">Label/Train</button>
+                      </li>
                     </ul>
                 </div>
             </div>
@@ -41,20 +39,27 @@
 
 
 
-        <div class="modal" tabindex="-1" id="createModal">
+        <div class="modal" tabindex="-1" id="addDataset">
             <div class="modal-dialog modal-dialog-centered">
               <div class="modal-content">
                 <div class="modal-header">
-                  <h5 class="modal-title">Create Project</h5>
+                  <h5 class="modal-title">Create Dataset</h5>
                   <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                  <p>Parent Directory: </p><p id="parent-directory"></p>
-                  <input type="text" class="form-control" id="project-name" aria-describedby="directory" placeholder="Project name...">
+                  <p>Name: </p>
+                  <input type="text" class="form-control" id="dataset-name" aria-describedby="directory" placeholder="e.g. dataset1" style="margin-bottom: 10px">
+                  <p>Behaviors: </p>
+                  <input type="text" class="form-control" id="dataset-behaviors" aria-describedby="directory" placeholder="e.g. eating; drinking; background" style="margin-bottom: 10px">
+
+                  <p>Directories to label: </p>
+                  <div id="recording_tree">
+                  </div>
+
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                  <button type="button" class="btn btn-primary" onclick="createProject()">Create</button>
+                  <button type="button" class="btn btn-primary" onclick="createDataset()">Create</button>
                 </div>
               </div>
             </div>
@@ -77,9 +82,367 @@
             </div>
           </div>
 
-        <script type="text/javascript">
-            
+          
+          <div class="modal" tabindex="-1" id="labelModal">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content" style="width:max-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">Label</h5>
+                </div>
+                <div class="modal-body">
+                  <div id="img-section">
+                    <img id="label-image" src="" alt="" style="width:500px; height: 500px;">
+                  </div>
+                  <div id="scoreboard">
 
+                  </div>
+                  <div id="controls">
+
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+
+        
+          <div class="container align-items-center justify-content-center">
+            <div class="col" id="dataset-container">
+              
+            </div>
+          </div>
+
+          <div class="fab-container">
+            <div class="fab shadow">
+              <div class="fab-content" onclick="showDatasetModal()">
+                <i class="bi bi-plus-lg" style="color:white; font-size:50px;"></i>
+              </div>
+            </div>
+          </div>
+
+        <script type="text/javascript">
+          
+          const ipc = window.ipcRenderer
+
+          let loaded = false
+          let routing = false
+
+          let labeling = false
+          
+          let datasetModal = new bootstrap.Modal(document.getElementById('addDataset'))
+
+          let dir_children = new Object();
+
+          function read(attr) {
+              let project_string = window.localStorage.getItem('project')
+              let project = JSON.parse(project_string)
+              return project[attr]
+          }
+
+          function routeRecord() {
+              routing = true 
+              window.open('./record.html', '_self');
+          }
+          function routeLabelTrain() {
+              routing = true 
+              window.open('./label-train.html', '_self');
+          }
+            
+          function load_initial() {
+              eel.datasets(read('data_sets'))().then( function(data) {
+
+                console.log(data)
+
+                let container = document.getElementById('dataset-container')
+
+                container.innerHTML = ""
+
+                let names = Object.keys(data)
+                let sets = data
+
+                for (i = 0; i < names.length; i++) {
+                    let n = names[i]
+                    let name = sets[n]['name']
+
+                    let behaviors = sets[n]['behaviors']
+                    
+                    let metrics = sets[n]['metrics']
+
+                    console.log(metrics)
+
+                    let mheaders = ['Train #', 'Test #', 'Precision','Recall', 'F1 Score']
+
+                    let html = `
+                    <div class="row-auto"  style="padding:15px">
+                        <div class="card shadow text-light bg-light" style="width: 700px; height:max-content;">
+                            <div class="card-header bg-dark">
+                                <h1 class="display-6">` + name +`</h1>
+                                <button class="btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
+                            </div>
+                    ` 
+
+                    for(b=0;b<behaviors.length;b++) {
+
+                      if(b==0) {
+                        html += `
+                            <div class="container" style='padding-top:10px'>
+                              <div class="row">
+                                <div class="col h5 text-dark">
+                                  Behavior
+                                </div>
+                                <div class="col h5 text-dark">
+                                  `+mheaders[0]+`
+                                </div>
+                                <div class="col h5 text-dark">
+                                  `+mheaders[1]+`
+                                </div>
+                                <div class="col h5 text-dark">
+                                  `+mheaders[2]+`
+                                </div>
+                                <div class="col h5 text-dark">
+                                  `+mheaders[3]+`
+                                </div>
+                                <div class="col h5 text-dark">
+                                  `+mheaders[4]+`
+                                </div>
+                              </div>
+                            </div>
+                      `
+                      }
+
+                      html += `
+                            <div class="container" style='padding-top:10px'>
+                              <div class="row">
+                                <div class="col h6 text-dark">
+                                  `+behaviors[b]+`
+                                </div>
+                                <div class="col h6 text-dark">
+                                  `+metrics[behaviors[b]][mheaders[0]]+`
+                                </div>
+                                <div class="col h6 text-dark">
+                                  `+metrics[behaviors[b]][mheaders[1]]+`
+                                </div>
+                                <div class="col h6 text-dark">
+                                    `+metrics[behaviors[b]][mheaders[2]]+`
+                                </div>
+                                <div class="col h6 text-dark">
+                                  `+metrics[behaviors[b]][mheaders[3]]+`
+                                </div>
+                                <div class="col h6 text-dark">
+                                  `+metrics[behaviors[b]][mheaders[4]]+`
+                                </div>
+                              </div>
+                            </div>
+                      `
+                    }
+                    
+                    html += `
+                        </div>
+                    </div>`
+
+                    container.innerHTML += html
+
+                }
+
+                  
+              })
+          }
+
+          eel.expose(updateLabelImageSrc);
+          function updateLabelImageSrc(val) {
+              console.log(val)
+              let elem = document.getElementById('label-image');
+              elem.src = "data:image/jpeg;base64, " + val
+          }
+
+          function labelModal(name) {
+
+            eel.start_labeling(read('data_sets'), name)(function (res){
+              if(res) {
+                  labeling = true 
+                  let labelModal = new bootstrap.Modal(document.getElementById('labelModal'))
+                  labelModal.show()
+              } else {
+                  document.getElementById('error-message').innerText = 'Error opening videos in this dataset.'
+                  let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                  errorModal.show()
+              }
+            })
+
+        
+          }
+
+          function createDataset() {
+
+              let dirs = Object.keys(dir_children)
+
+              if(dirs.length==0) {
+                  document.getElementById('error-message').innerText = 'No recordings selected, try again.'
+                  let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                  errorModal.show()
+                  return
+              }
+
+              let recordings = []
+
+              for(i=0;i<dirs.length;i++) {
+                let elem = document.getElementById(dirs[i])
+
+                if(elem.checked) {
+                  recordings.push(dirs[i])
+                  continue
+                } 
+
+                let subdirs = dir_children[dirs[i]]
+
+                for(j=0;j<subdirs.length;j++) {
+                  let elem = document.getElementById(dirs[i]+'-'+subdirs[j])
+
+                  if(elem.checked) {
+                    recordings.push(dirs[i]+'\\'+subdirs[j])
+                  } 
+                }
+              }
+
+              let name = document.getElementById('dataset-name').value
+              let behaviors = document.getElementById('dataset-behaviors').value
+
+              let behavior_array = behaviors.split(';')
+
+              if(behavior_array.length<=1) {
+                  document.getElementById('error-message').innerText = 'Must have two or more behaviors specified, try again.'
+                  let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                  errorModal.show()
+                  return
+              }
+
+              let ba = []
+              for(i=0;i<behavior_array.length;i++) {
+                ba.push(behavior_array[i].trim())
+              }
+
+
+
+              eel.create_dataset(read('data_sets'), name, ba, recordings)(function (ret){
+                if(!ret) {
+                  document.getElementById('error-message').innerText = 'Unable to create the dataset.'
+                  let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                  errorModal.show()
+                  return
+                }
+              })
+
+              datasetModal.hide()
+              datasetModal = new bootstrap.Modal(document.getElementById('addDataset'))
+
+              load_initial()
+          }
+
+          window.addEventListener("unload", function(e){
+              if(!routing) {
+                  eel.kill_streams();
+              }
+          });
+
+          window.onbeforeunload = function (){
+              if(!routing) {
+                  eel.kill_streams();
+              }
+          }
+
+          function updateChildren(dir) {
+            let subdirs = dir_children[dir]
+            let parent = document.getElementById(dir)
+
+            if(subdirs.length>0) {
+              for(i=0;i<subdirs.length;i++) {
+                let child = document.getElementById(dir+'-'+subdirs[i])
+                child.checked = parent.checked
+              }
+            }
+          }
+
+          function showDatasetModal() {
+
+              eel.get_record_tree()(function (rt){
+
+                if(rt) {
+                  let elem = document.getElementById('recording_tree')
+
+                  dir_children = new Object()
+
+                  elem.innerHTML = ''
+
+                  let dirs = Object.keys(rt)
+
+                  for(i=0;i<dirs.length;i++) {
+                    subdirs = rt[dirs[i]]
+
+                    dir_children[dirs[i]] = subdirs
+
+                    elem.innerHTML += `
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="" id="`+dirs[i]+`" onChange="updateChildren(`+dirs[i]+`)">
+                      <label class="form-check-label" for="flexCheckDefault">
+                        `+ dirs[i] +`
+                      </label>
+                    </div>
+                    `
+                    for(j=0;j<subdirs.length;j++) {
+                      elem.innerHTML += `
+                      <div class="form-check" style='margin-left:10px'>
+                        <input class="form-check-input" type="checkbox" value="" id="`+dirs[i]+`-`+subdirs[i]+`">
+                        <label class="form-check-label" for="flexCheckDefault">
+                          `+ subdirs[j] +`
+                        </label>
+                      </div>
+                      `
+                    }
+
+                  }
+
+                  datasetModal.show()
+                } else {
+                  document.getElementById('error-message').innerText = 'No recordings yet, try this again when you have recorded videos.'
+                  let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                  errorModal.show()
+                }
+
+              })
+              
+          }
+
+          window.addEventListener("keydown", (event) => {
+
+            if(labeling) {
+                switch (event.key) {
+                  case "ArrowLeft":
+                      eel.nextFrame(-1);
+                      break;
+                  case "ArrowRight":
+                      eel.nextFrame(1);
+                      break;
+                  case "ArrowUp":
+                      // Up pressed
+                      break;
+                  case "ArrowDown":
+                      // Down pressed
+                      break;
+              }
+
+            }
+
+          })
+
+          window.setInterval(function(){
+            load_initial()
+          }, 10000)
+          window.setTimeout(function(){
+            load_initial()
+          }, 1000)
 
         </script>
 

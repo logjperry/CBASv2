@@ -18,11 +18,16 @@ from datetime import datetime, timezone
 import h5py
 
 import torch
+from torch.cuda.amp import autocast, GradScaler
 from torch import nn 
 from transformers import AutoImageProcessor, AutoModel
 
 from decord import VideoReader
 from decord import cpu, gpu
+
+import ctypes
+
+import threading
 
 class encoder(nn.Module):
 
@@ -37,8 +42,6 @@ class encoder(nn.Module):
         for param in self.model.parameters():
             param.requires_grad = False
 
-        self.processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
-
     def forward(self, x):
 
         B, S, H, W = x.shape
@@ -49,22 +52,162 @@ class encoder(nn.Module):
 
         x = x.reshape(B*S, 3, H, W)
 
-        inputs = self.processor(images=x, return_tensors="pt").to(self.device)
-
         with torch.no_grad():
-            out = self.model(**inputs)
+            out = self.model(x)
 
         cls = out.last_hidden_state[:, 0, :].reshape(B, S, 768)
 
         return cls
-
+    
 
 active_streams = {}
 
 recordings = ''
 
+stop_threads = False
+
+progresses = []
+
+label_capture = None
+label_videos = []
+label_vid_index = -1
+label_index = -1
+label = -1 
+start = -1
+
+class inference_thread(threading.Thread):
+    def __init__(self, name):
+        threading.Thread.__init__(self)
+        self.name = name
+             
+    def run(self):
+        global stop_threads
+        global progresses
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        enc = encoder(device).to(device)
+
+        while True:
+
+            progresses = []
+            
+            if recordings!='':
+
+                videos = []
+
+                sub_dirs = [os.path.join(recordings, d) for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
+
+
+                for sd in sub_dirs:
+
+                    sub_sub_dirs = [os.path.join(sd, d) for d in os.listdir(sd) if os.path.isdir(os.path.join(sd, d))]
+
+
+                    for ssd in sub_sub_dirs:
+
+                        videos.extend([os.path.join(ssd, vid) for vid in os.listdir(ssd) if vid.endswith('.mp4') and not os.path.exists(os.path.join(ssd, vid.replace('.mp4', '_cls.h5')))])
+
+
+                valid_videos = []
+                for v in videos:
+                    cap = cv2.VideoCapture(v)
+
+                    if not cap.isOpened():
+                        continue
+
+                    valid_videos.append(v)
+                
+                videos = valid_videos
+
+                if len(videos)==0:
+
+                    time.sleep(5)
+                    continue
+
+                progresses = [0 for v in videos]
+
+                m = 100/len(progresses)
+
+                for iv, v in enumerate(videos):
+                    try:
+
+                        cap = cv2.VideoCapture(v)
+
+                        if not cap.isOpened():
+                            progresses[iv] = -1
+
+                            time.sleep(5)
+                            continue
+
+                        vr = VideoReader(v, ctx=cpu(0))
+                        
+                        frames = vr.get_batch(range(0, len(vr), 1)).asnumpy()
+
+                        frames = torch.from_numpy(frames[:, :, :, 1]/255).half()
+
+                        batch_size = 1024
+
+                        clss = []
+
+                        for i in range(0, len(frames), batch_size):
+                            batch = frames[i:i+batch_size]
+
+                            progresses[iv] = (i)/len(frames)*m
+
+                            with torch.no_grad() and autocast():
+                                out = enc(batch.unsqueeze(1).to(device))
+
+                            out = out.squeeze(1).to('cpu')
+                            clss.extend(out)
+
+                        file_path = os.path.splitext(v)[0]+'_cls.h5'
+
+                        with h5py.File(file_path, 'w') as file:
+                            file.create_dataset('cls', data=torch.stack(clss).numpy())
+
+                        progresses[iv] = m
+                        
+                    except Exception as e:
+                        progresses[iv] = -1
+                        print('Error processing video:', v)
+                        continue
+
+                
+                time.sleep(5)
+            else:
+                time.sleep(5)
+          
+    def get_id(self):
+ 
+        # returns id of the respective thread
+        if hasattr(self, '_thread_id'):
+            return self._thread_id
+        for id, thread in threading._active.items():
+            if thread is self:
+                return id
+  
+    def raise_exception(self):
+        thread_id = self.get_id()
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
+              ctypes.py_object(SystemExit))
+        if res > 1:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+            print('Exception raise failure')
+
+
+thread = inference_thread('inference')
+
 eel.init('frontend')
 eel.browsers.set_path('electron', 'node_modules/electron/dist/electron')
+
+@eel.expose 
+def get_progress_update():
+    if len(progresses)==0:
+        eel.inferLoadBar(False)()
+    else:
+        eel.inferLoadBar(progresses)()
+
 
 @eel.expose
 def make_recording_dir(root, sub_dir, camera_name):
@@ -75,7 +218,7 @@ def make_recording_dir(root, sub_dir, camera_name):
     if not os.path.exists(os.path.join(root, sub_dir)):
         os.mkdir(os.path.join(root, sub_dir))
     
-    cam_session = camera_name + '_' + datetime.now().strftime('%I%M%S-%p')    
+    cam_session = camera_name + '-' + datetime.now().strftime('%I%M%S-%p')    
     
     if not os.path.exists(os.path.join(root, sub_dir, cam_session)):
         os.mkdir(os.path.join(root, sub_dir, cam_session))
@@ -133,6 +276,65 @@ def create_project(parent_directory, project_name):
 
     return True, {'project':project, 'cameras':cameras, 'recordings':recordings, 'models':models, 'data_sets':data_sets}
 
+@eel.expose 
+def datasets(dataset_directory):
+    dsets = {}
+
+    for dataset in os.listdir(dataset_directory):
+        if os.path.isdir(os.path.join(dataset_directory, dataset)):
+
+            dataset_config = os.path.join(dataset_directory, dataset, 'config.yaml')
+
+            with open(dataset_config, 'r') as file:
+                dconfig = yaml.safe_load(file)
+
+            dsets[dataset] = dconfig
+
+            print(dconfig)
+    
+    if len(dsets)>0:
+        return dsets 
+    else:
+        return False
+
+@eel.expose 
+def create_dataset(dataset_directory, name, behaviors, recordings):
+
+    rt = get_record_tree()
+
+    if not rt:
+        return False 
+    
+    whitelist = []
+
+    for r in recordings:
+        whitelist.append(r+'\\')
+    
+    directory = os.path.join(dataset_directory, name)
+
+    if os.path.exists(directory):
+        return False 
+    else:
+        os.mkdir(directory)
+
+        dataset_config = os.path.join(directory, 'config.yaml')
+
+        metrics = {b:{'Train #':0, 'Test #':0, 'Precision':'N/A', 'Recall':'N/A', 'F1 Score':'N/A'} for b in behaviors}
+
+        dconfig = {
+            'name':name,
+            'behaviors':behaviors,
+            'whitelist':whitelist,
+            'model':None,
+            'metrics':metrics
+        }
+
+        with open(dataset_config, 'w+') as file:
+            yaml.dump(dconfig, file, allow_unicode=True)
+
+        return True
+
+
 @eel.expose
 def ping_cameras(camera_directory):
     names = []
@@ -153,10 +355,11 @@ def ping_cameras(camera_directory):
 
             frame_location = os.path.join(camera_directory, camera, 'frame.jpg')
 
+            if os.path.exists(frame_location):
+                os.remove(frame_location)
+
             command = f"ffmpeg -loglevel panic -rtsp_transport tcp -i {rtsp_url} -vf \"select=eq(n\,34)\" -vframes 1 -y {frame_location}"
             
-            #command = f"ffmpeg -loglevel panic -rtsp_transport tcp -i {rtsp_url} -filter_complex \"[0:v]crop=(iw*{cw}):(ih*{ch}):(iw*{cx}):(ih*{cy}),scale={scale}:{scale},select=eq(n\,34)[cropped]\" -map [cropped] -vframes 1 -y {preview_location}"
-        
             subprocess.Popen(command, shell=True)
 
             print(f'Finished loading camera: {cconfig["name"]} at {cconfig["rtsp_url"]}...')
@@ -358,6 +561,192 @@ def start_camera_stream(camera_directory, name, destination, segment_time, durat
 
     return True
 
+@eel.expose 
+def get_record_tree():
+    global recordings
+
+    rt = {}
+
+    if recordings=='':
+        return False 
+    else:
+        sub_dirs = [d for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
+
+        if len(sub_dirs)==0:
+            return False 
+        else:
+            rt = {sd:[] for sd in sub_dirs}
+
+            for sd in sub_dirs:
+
+                sub_sub_dirs = [d for d in os.listdir(os.path.join(recordings,sd)) if os.path.isdir(os.path.join(recordings,sd, d))]
+
+                rt[sd] = sub_sub_dirs
+
+    return rt
+
+@eel.expose 
+def label_frame(value):
+    global label 
+    global label_index 
+    global start
+
+    if value==label:
+        print('storing label')
+        end = label_index
+    elif value==-1:
+        print('starting label')
+        label = value
+        start = label_index
+    else:
+        raise Exception('Label does not match that that was started.')
+
+@eel.expose
+def nextFrame(shift):
+    global label_capture
+    global label_videos
+    global label_vid_index
+    global label_index
+    global label 
+    global start
+
+    if label_capture.isOpened():
+
+        amount_of_frames = label_capture.get(cv2.CAP_PROP_FRAME_COUNT)
+
+        label_index+=shift 
+        label_index%=amount_of_frames
+
+        label_capture.set(cv2.CAP_PROP_POS_FRAMES, label_index)
+
+        ret, frame = label_capture.read()
+
+        if ret:
+            
+            ret, frame = cv2.imencode('.jpg', frame)
+            
+            frame = frame.tobytes()
+
+            blob = base64.b64encode(frame)
+            blob = blob.decode("utf-8")
+
+            eel.updateLabelImageSrc(blob)()
+        
+
+
+
+
+@eel.expose
+def nextVideo(shift):
+    global label_capture
+    global label_videos
+    global label_vid_index
+    global label_index
+    global label 
+    global start
+
+    start = -1
+    label_vid_index = label_vid_index+shift
+    label = -1
+    label_index = -1
+
+    video = label_videos[label_vid_index%len(label_videos)]
+
+    label_capture = cv2.VideoCapture(video)
+
+    if not label_capture.isOpened():
+
+        recovered = False
+        for i in range(len(label_videos)):
+            label_vid_index+=shift
+            video = label_videos[label_vid_index%len(label_videos)]
+            label_capture = cv2.VideoCapture(video)
+
+            if label_capture.isOpened():
+                recovered = True 
+                break 
+
+        if not recovered:
+            raise Exception('No valid videos in the dataset.')
+        
+    print('loading frame')
+        
+    nextFrame(1)
+
+
+
+@eel.expose 
+def start_labeling(root, dataset_name):
+
+    global recordings
+    global label_capture
+    global label_videos
+    global label_vid_index
+    global label_index
+    global label 
+    global start
+
+    
+    label_capture = None
+    label_videos = []
+    label_vid_index = -1
+    label_index = -1
+    label = -1 
+    start = -1
+
+    dataset_config = os.path.join(root, dataset_name,'config.yaml')
+
+    if not os.path.exists(dataset_config):
+        return False
+    
+    with open(dataset_config, 'r') as file:
+        dconfig = yaml.safe_load(file)
+
+    whitelist = dconfig['whitelist']
+
+    all_videos = []
+
+    if recordings=='':
+        return False 
+    else:
+        sub_dirs = [os.path.join(recordings, d) for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
+
+        if len(sub_dirs)==0:
+            return False 
+        else:
+
+            for sd in sub_dirs:
+
+                sub_sub_dirs = [os.path.join(sd, d) for d in os.listdir(sd) if os.path.isdir(os.path.join(sd, d))]
+
+                for ssd in sub_sub_dirs:
+
+                    all_videos.extend([os.path.join(ssd, v) for v in os.listdir(ssd) if v.endswith('.mp4')])
+
+    valid_videos = []
+    for v in all_videos:
+        for wl in whitelist:
+            if wl in v:
+                valid_videos.append(v)
+
+    if len(valid_videos)==0:
+        return False
+    else:
+        label_videos = valid_videos
+        
+    nextVideo(1)
+
+    return True
+
+
+@eel.expose
+def get_active_streams():
+
+    if len(active_streams.keys())>0:
+        return list(active_streams.keys())
+    return False
+
+
 @eel.expose
 def stop_camera_stream(camera_name):
     global active_streams
@@ -373,67 +762,21 @@ def stop_camera_stream(camera_name):
 @eel.expose
 def kill_streams():
     global active_streams
+    global stop_threads
+    global thread
 
     for stream in active_streams.keys():
         active_streams[stream].communicate(input=b'q')
+    
+    stop_threads = True
+    thread.raise_exception()
+    thread.join()
+
 
 eel.start('frontend/index.html', mode='electron', block=False)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-enc = encoder(device).to(device)
+thread.start()
 
 while True:
-    
-    if recordings!='':
+    eel.sleep(1.0) 
 
-        sub_dirs = [os.path.join(recordings, d) for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
-
-        for sd in sub_dirs:
-
-            sub_sub_dirs = [os.path.join(sd, d) for d in os.listdir(sd) if os.path.isdir(os.path.join(sd, d))]
-
-            for ssd in sub_sub_dirs:
-
-                videos = [os.path.join(ssd, vid) for vid in os.listdir(ssd) if vid.endswith('.mp4') and not os.path.exists(os.path.join(ssd, vid.replace('.mp4', '_cls.h5')))]
-
-                for v in videos:
-
-                    try:
-
-                        cap = cv2.VideoCapture(v)
-
-                        if not cap.isOpened():
-                            continue
-
-                        vr = VideoReader(v, ctx=cpu(0))
-                        
-                        frames = vr.get_batch(range(0, len(vr), 1)).asnumpy()
-
-                        frames = torch.from_numpy(frames[:, :, :, 1]).float()
-
-                        batch_size = 256
-
-                        clss = []
-
-                        for i in range(0, len(frames), batch_size):
-                            batch = frames[i:i+batch_size]
-
-                            with torch.no_grad():
-                                out = enc(batch.unsqueeze(1).to(device))
-
-                            out = out.squeeze(1).to('cpu')
-                            clss.extend(out)
-
-                        file_path = os.path.splitext(v)[0]+'_cls.h5'
-
-                        with h5py.File(file_path, 'w') as file:
-                            file.create_dataset('cls', data=torch.stack(clss).numpy())
-                        
-                    except Exception as e:
-                        print('Error processing video:', v)
-                        continue
-
-        eel.sleep(5.0)
-    else:
-        eel.sleep(60.0) 

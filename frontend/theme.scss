@@ -147,3 +147,32 @@ to {transform:rotate(360deg);}
   animation: spin .8s linear infinite;
 }
 
+
+#inference-bar{
+  position:fixed;
+  width: 40vw;
+  height: 20px;
+  left:30vw;right:30vw;
+  bottom:45px;
+
+  visibility: hidden;
+}
+
+
+#fun-blurb{
+  position: absolute;
+  top:80%;
+  right:0%;
+  width: 300px;
+  color:purple;
+  text-align: center;
+  font-size: 25px;
+  font-family: 'Courier New', monospace;
+  font-weight: bolder;
+  transform: rotate(-15deg);
+  animation: anisize 1s infinite;
+}
+
+@keyframes anisize {
+  50% {font-size: 28px;}
+}

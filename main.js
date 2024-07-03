@@ -48,9 +48,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+
 const ipc = require('electron').ipcMain
 const dialog = require('electron').dialog
 const storage = require('electron-json-storage');
+const { electron } = require('node:process')
 
 ipc.on('open-file-dialog', async function (event) {
 
