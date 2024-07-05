@@ -110,6 +110,35 @@ $primary: rgb(75, 162, 255);
   }
 }
 
+.fab-container-inference {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  user-select: none;
+  position: fixed;
+  top: 70px; right: 30px;
+  &:hover {
+    height: 100%;
+    cursor: pointer;
+    
+  }
+  .fab {
+    position: absolute;
+    height: 50px; width: 50px;
+    top: 0px; right: 15px;
+    background-color: $primary;
+    border-radius: 50%;
+    z-index: 2;
+    .fab-content {
+      display: flex;
+      align-items: center; justify-content: center;
+      height: 100%; width: 100%;
+      border-radius: 50%;
+    }
+  }
+}
+
 #cover-spin {
   position:fixed;
   width:100%;
@@ -176,3 +205,4 @@ to {transform:rotate(360deg);}
 @keyframes anisize {
   50% {font-size: 28px;}
 }
+

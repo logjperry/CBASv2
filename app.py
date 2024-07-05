@@ -25,6 +25,12 @@ from transformers import AutoImageProcessor, AutoModel
 from decord import VideoReader
 from decord import cpu, gpu
 
+
+from cmap import Colormap
+
+
+import numpy as np
+
 import ctypes
 
 import threading
@@ -68,12 +74,18 @@ stop_threads = False
 
 progresses = []
 
+label_dict_path = None
+label_dict = None
+col_map = None
+
 label_capture = None
 label_videos = []
 label_vid_index = -1
 label_index = -1
 label = -1 
 start = -1
+
+toggle_infer = False
 
 class inference_thread(threading.Thread):
     def __init__(self, name):
@@ -83,6 +95,7 @@ class inference_thread(threading.Thread):
     def run(self):
         global stop_threads
         global progresses
+        global toggle_infer
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -92,7 +105,7 @@ class inference_thread(threading.Thread):
 
             progresses = []
             
-            if recordings!='':
+            if recordings!='' and toggle_infer:
 
                 videos = []
 
@@ -174,9 +187,9 @@ class inference_thread(threading.Thread):
                         continue
 
                 
-                time.sleep(5)
+                time.sleep(1)
             else:
-                time.sleep(5)
+                time.sleep(1)
           
     def get_id(self):
  
@@ -198,8 +211,110 @@ class inference_thread(threading.Thread):
 
 thread = inference_thread('inference')
 
+def add_instance():
+    global label_videos 
+    global label_vid_index
+    global label_capture
+    global label
+    global label_index
+    global start
+
+    global label_dict
+    global col_map
+
+    stemp = min(start, label_index)
+    eInd = max(start, label_index)
+    sInd = stemp 
+
+    # check for collisions
+    labels = label_dict['labels']
+    behaviors = label_dict['behaviors']
+
+    for i, b in enumerate(behaviors):
+        sub_labels = labels[b]
+
+        for l in sub_labels:
+            if l['video']==label_videos[label_vid_index]:
+                if sInd < l['end'] and sInd > l['start']:
+                    label = -1
+                    raise Exception('Overlapping behavior region! Behavior not recorded.')
+                elif eInd < l['end'] and eInd > l['start']:
+                    label = -1
+                    raise Exception('Overlapping behavior region! Behavior not recorded.')
+                
+    instance = {
+        'video': label_videos[label_vid_index],
+        'start': sInd,
+        'end': eInd
+    }
+
+    behavior = label_dict['behaviors'][label]
+
+    label_dict['labels'][behavior].append(instance)
+
+    # save the label dictionary
+    with open(label_dict_path, 'w+') as file:
+        yaml.dump(label_dict, file, allow_unicode=True)
+
+def fill_colors(frame):
+    global label_videos 
+    global label_vid_index
+    global label_capture
+    global label
+    global label_index
+    global start
+
+    global label_dict
+    global col_map
+
+    behaviors = label_dict['behaviors']
+
+    labels = label_dict['labels']
+
+    cur_video = label_videos[label_vid_index]
+    amount_of_frames = label_capture.get(cv2.CAP_PROP_FRAME_COUNT)
+
+    for i, b in enumerate(behaviors):
+
+        sub_labels = labels[b]
+
+        color = str(col_map(i)).lstrip('#')
+        color = np.flip(np.array([int(color[i:i+2], 16) for i in (0, 2, 4)]))
+
+        for l in sub_labels:
+            if l['video'] != cur_video:
+                continue 
+            sInd = l['start']
+            eInd = l['end']
+
+            marker_posS = int(frame.shape[1] * sInd/amount_of_frames)
+            marker_posE = int(frame.shape[1] * eInd/amount_of_frames)
+
+            frame[-19:, marker_posS:marker_posE+1,] = color
+
+    if label!=-1:
+        color = str(col_map(label)).lstrip('#')
+        color = np.flip(np.array([int(color[i:i+2], 16) for i in (0, 2, 4)]))
+        
+        stemp = min(start, label_index)
+        eInd = max(start, label_index)
+
+        sInd = stemp 
+
+        marker_posS = int(frame.shape[1] * sInd/amount_of_frames)
+        marker_posE = int(frame.shape[1] * eInd/amount_of_frames)
+
+        frame[-19:, marker_posS:marker_posE+1,] = color
+
+    return frame
+            
 eel.init('frontend')
 eel.browsers.set_path('electron', 'node_modules/electron/dist/electron')
+
+@eel.expose 
+def switch_infer():
+    global toggle_infer
+    toggle_infer = not toggle_infer
 
 @eel.expose 
 def get_progress_update():
@@ -207,7 +322,6 @@ def get_progress_update():
         eel.inferLoadBar(False)()
     else:
         eel.inferLoadBar(progresses)()
-
 
 @eel.expose
 def make_recording_dir(root, sub_dir, camera_name):
@@ -300,6 +414,9 @@ def datasets(dataset_directory):
 @eel.expose 
 def create_dataset(dataset_directory, name, behaviors, recordings):
 
+    global label_dict_path
+    global label_dict
+
     rt = get_record_tree()
 
     if not rt:
@@ -319,6 +436,8 @@ def create_dataset(dataset_directory, name, behaviors, recordings):
 
         dataset_config = os.path.join(directory, 'config.yaml')
 
+        label_file = os.path.join(directory, 'labels.yaml')
+
         metrics = {b:{'Train #':0, 'Test #':0, 'Precision':'N/A', 'Recall':'N/A', 'F1 Score':'N/A'} for b in behaviors}
 
         dconfig = {
@@ -329,11 +448,21 @@ def create_dataset(dataset_directory, name, behaviors, recordings):
             'metrics':metrics
         }
 
+        labelconfig = {
+            'behaviors':behaviors,
+            'labels':{b:[] for b in behaviors}
+        }
+
         with open(dataset_config, 'w+') as file:
             yaml.dump(dconfig, file, allow_unicode=True)
 
-        return True
+        with open(label_file, 'w+') as file:
+            yaml.dump(labelconfig, file, allow_unicode=True)
 
+        label_dict_path = label_file
+        label_dict = labelconfig
+
+        return True
 
 @eel.expose
 def ping_cameras(camera_directory):
@@ -587,18 +716,26 @@ def get_record_tree():
 
 @eel.expose 
 def label_frame(value):
+    
+    global label_dict
+
     global label 
     global label_index 
     global start
 
+    behaviors = label_dict['behaviors']
+
+    if value>=len(behaviors):
+        return False
+
     if value==label:
-        print('storing label')
-        end = label_index
-    elif value==-1:
-        print('starting label')
+        add_instance()
+        label = -1
+    elif label==-1:
         label = value
         start = label_index
     else:
+        label = -1
         raise Exception('Label does not match that that was started.')
 
 @eel.expose
@@ -622,8 +759,31 @@ def nextFrame(shift):
         ret, frame = label_capture.read()
 
         if ret:
-            
-            ret, frame = cv2.imencode('.jpg', frame)
+
+            frame = cv2.resize(frame, (500, 500))
+
+            temp = np.zeros((frame.shape[0]+20, frame.shape[1], frame.shape[2]))
+
+            temp[:-20,:,:] = frame 
+
+            temp[-20,:,:] = 0
+
+            temp[-19:,:,:] = 100
+
+            temp = fill_colors(temp)
+
+            marker_pos = int(frame.shape[1] * label_index/amount_of_frames)
+
+            if marker_pos!=0 and marker_pos!=frame.shape[1]-1:
+                temp[-17:-2, marker_pos-1:marker_pos+2, :] = 255
+            else:
+                if marker_pos==0:
+                    temp[-17:-2, marker_pos:marker_pos+2, :] = 255
+                else:
+                    temp[-17:-2, marker_pos-1:marker_pos+1, :] = 255
+
+
+            ret, frame = cv2.imencode('.jpg', temp)
             
             frame = frame.tobytes()
 
@@ -632,10 +792,6 @@ def nextFrame(shift):
 
             eel.updateLabelImageSrc(blob)()
         
-
-
-
-
 @eel.expose
 def nextVideo(shift):
     global label_capture
@@ -673,10 +829,13 @@ def nextVideo(shift):
         
     nextFrame(1)
 
-
-
 @eel.expose 
 def start_labeling(root, dataset_name):
+
+    global label_dict_path
+    global label_dict
+
+    global col_map
 
     global recordings
     global label_capture
@@ -686,7 +845,6 @@ def start_labeling(root, dataset_name):
     global label 
     global start
 
-    
     label_capture = None
     label_videos = []
     label_vid_index = -1
@@ -695,10 +853,24 @@ def start_labeling(root, dataset_name):
     start = -1
 
     dataset_config = os.path.join(root, dataset_name,'config.yaml')
+    label_file = os.path.join(root, dataset_name,'labels.yaml')
+
+    label_dict_path = label_file
+
+    cm = Colormap('seaborn:tab20')
+
+    col_map = cm
+
+
+    if not os.path.exists(label_dict_path):
+        return False
 
     if not os.path.exists(dataset_config):
         return False
     
+    with open(label_dict_path, 'r') as file:
+        label_dict = yaml.safe_load(file)
+
     with open(dataset_config, 'r') as file:
         dconfig = yaml.safe_load(file)
 
@@ -736,8 +908,7 @@ def start_labeling(root, dataset_name):
         
     nextVideo(1)
 
-    return True
-
+    return label_dict['behaviors'], [str(col_map(i)) for i in range(len(label_dict['behaviors']))]
 
 @eel.expose
 def get_active_streams():
@@ -745,7 +916,6 @@ def get_active_streams():
     if len(active_streams.keys())>0:
         return list(active_streams.keys())
     return False
-
 
 @eel.expose
 def stop_camera_stream(camera_name):
@@ -771,7 +941,6 @@ def kill_streams():
     stop_threads = True
     thread.raise_exception()
     thread.join()
-
 
 eel.start('frontend/index.html', mode='electron', block=False)
 

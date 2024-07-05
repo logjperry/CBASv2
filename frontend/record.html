@@ -24,7 +24,7 @@
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="collapse navbar-collapse" id="navbarNav" style="width:100%">
                     <ul class="navbar-nav">
                         <li class="nav-item">
                             <button class="nav-link text-white" onclick="routeRecord()">Record</button>
@@ -33,12 +33,13 @@
                             <button class="nav-link" onclick="routeLabelTrain()">Label/Train</button>
                         </li>
                     </ul>
+            
                 </div>
             </div>
         </nav>
 
 
-
+        
         <div class="container align-items-center justify-content-center">
           <div class="row" id="camera-container">
             
@@ -159,6 +160,15 @@
             </div>
         </div>
 
+        <div class="fab-container-inference">
+            <div class="fab shadow">
+              <div class="fab-content" onclick="toggleInfer()">
+                <i class="bi bi-stars" style="color:white; font-size:35px; visibility: visible;" id="on"></i>
+                <i class="bi bi-pause" style="color:white; font-size:0px; visibility: hidden;" id='off'></i>
+              </div>
+            </div>
+        </div>
+
         <div id="cover-spin"></div>
 
         <div class="progress" id="inference-bar" style="border: 1px solid white">
@@ -189,6 +199,25 @@
             function routeLabelTrain() {
                 routing = true 
                 window.open('./label-train.html', '_self');
+            }
+
+            function toggleInfer() {
+
+                let val = document.getElementById('on').style.visibility == 'visible'
+
+                if(val) {
+                    document.getElementById('on').style.visibility = 'hidden'
+                    document.getElementById('on').style.fontSize = '0px'
+                    document.getElementById('off').style.visibility = 'visible'
+                    document.getElementById('off').style.fontSize = '35px'
+                } else {
+                    document.getElementById('on').style.visibility = 'visible'
+                    document.getElementById('on').style.fontSize = '35px'
+                    document.getElementById('off').style.visibility = 'hidden'
+                    document.getElementById('off').style.fontSize = '0px'
+                }
+
+                eel.switch_infer()
             }
 
             function load_initial() {
@@ -274,8 +303,6 @@
                         elem.style.visibility = 'hidden'
                     }, 1000)
                 }
-
-                
 
             }
 

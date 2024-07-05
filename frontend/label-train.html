@@ -26,12 +26,12 @@
                 </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav">
-                      <li class="nav-item">
-                          <button class="nav-link" onclick="routeRecord()">Record</button>
-                      </li>
-                      <li class="nav-item">
-                          <button class="nav-link text-white" onclick="routeLabelTrain()">Label/Train</button>
-                      </li>
+                        <li class="nav-item">
+                            <button class="nav-link" onclick="routeRecord()">Record</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link text-white" onclick="routeLabelTrain()">Label/Train</button>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -82,50 +82,64 @@
             </div>
           </div>
 
-          
-          <div class="modal" tabindex="-1" id="labelModal">
-            <div class="modal-dialog modal-dialog-centered">
-              <div class="modal-content" style="width:max-content">
-                <div class="modal-header">
-                  <h5 class="modal-title">Label</h5>
-                </div>
-                <div class="modal-body">
-                  <div id="img-section">
-                    <img id="label-image" src="" alt="" style="width:500px; height: 500px;">
-                  </div>
-                  <div id="scoreboard">
 
-                  </div>
-                  <div id="controls">
-
-                  </div>
+        <div id="datasets" style="display: block;">
+            <div class="container align-items-center justify-content-center">
+                <div class="col" id="dataset-container">
+                    
                 </div>
-                <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Save</button>
-                </div>
-              </div>
             </div>
-          </div>
 
+            <div class="fab-container">
+                <div class="fab shadow">
+                    <div class="fab-content" onclick="showDatasetModal()">
+                        <i class="bi bi-plus-lg" style="color:white; font-size:50px;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
 
+        <div class="d-flex col align-items-center justify-content-center" style="height: max-content; width: 100vw;">
+
+            <div class="card text-start"  id="label"  style="height: 800px; width: 95vw; min-width: 750px; display: none;background-color: #343a40;">
+
+                <div class="card-body d-flex col align-items-center justify-content-center" style="padding: 20px;">
+                    <div class="container-fluid">
+                        <div class="row" style="padding-bottom: 10px;">
+                            <div class="col">
+                                <div id="img-section">
+                                    <img id="label-image" src="" alt="" style="border:2px solid black;">
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div id="controls" style="min-width: 156px; width: 20vw; height: 520px;">
+
+                                </div>
+                            </div>
         
-          <div class="container align-items-center justify-content-center">
-            <div class="col" id="dataset-container">
-              
-            </div>
-          </div>
+                        </div>
+                        <div class="row" style="height: 200px; width:710px; background-color: #adb5bd;">
+                            <div id="scoreboard">
 
-          <div class="fab-container">
-            <div class="fab shadow">
-              <div class="fab-content" onclick="showDatasetModal()">
-                <i class="bi bi-plus-lg" style="color:white; font-size:50px;"></i>
-              </div>
+
+                            </div>
+                        </div>
+        
+                    </div>
+                    <div id="controls">
+        
+                    </div>
+            
+                </div>
             </div>
-          </div>
+            
+        </div>
+          
 
         <script type="text/javascript">
           
-          const ipc = window.ipcRenderer
+          const ipc = window.ipcRendere
+
 
           let loaded = false
           let routing = false
@@ -135,6 +149,8 @@
           let datasetModal = new bootstrap.Modal(document.getElementById('addDataset'))
 
           let dir_children = new Object();
+
+          let surf = 1;
 
           function read(attr) {
               let project_string = window.localStorage.getItem('project')
@@ -154,7 +170,6 @@
           function load_initial() {
               eel.datasets(read('data_sets'))().then( function(data) {
 
-                console.log(data)
 
                 let container = document.getElementById('dataset-container')
 
@@ -171,8 +186,6 @@
                     
                     let metrics = sets[n]['metrics']
 
-                    console.log(metrics)
-
                     let mheaders = ['Train #', 'Test #', 'Precision','Recall', 'F1 Score']
 
                     let html = `
@@ -180,7 +193,7 @@
                         <div class="card shadow text-light bg-light" style="width: 700px; height:max-content;">
                             <div class="card-header bg-dark">
                                 <h1 class="display-6">` + name +`</h1>
-                                <button class="btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
+                                <button class="btn btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
                             </div>
                     ` 
 
@@ -263,8 +276,39 @@
             eel.start_labeling(read('data_sets'), name)(function (res){
               if(res) {
                   labeling = true 
-                  let labelModal = new bootstrap.Modal(document.getElementById('labelModal'))
-                  labelModal.show()
+
+                  let controls = document.getElementById('controls')
+
+                  behaviors = res[0]
+                  colors = res[1]
+
+                  for(i=0;i<20-behaviors.length;i++) {
+                    behaviors.push('behavior '+i+"")
+                  }
+
+                  for(i=0;i<behaviors.length;i++) {
+
+                    let k = i
+
+                    if(i>9){
+                        k = String.fromCharCode(97+i-9)
+                    }
+
+                    controls.innerHTML += `
+                            <div class="row">
+                                <div class="col h6 text-light">
+                                    `+behaviors[i]+`
+                                </div>
+                                <div class="col h6 text-center" style="background-color:`+colors[i]+`;">
+                                    `+k+`
+                                </div>
+                            </div>
+                                `
+                  }
+
+                  document.getElementById('datasets').style.display = 'none'
+                  document.getElementById('label').style.display = 'flex'
+
               } else {
                   document.getElementById('error-message').innerText = 'Error opening videos in this dataset.'
                   let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
@@ -312,8 +356,8 @@
 
               let behavior_array = behaviors.split(';')
 
-              if(behavior_array.length<=1) {
-                  document.getElementById('error-message').innerText = 'Must have two or more behaviors specified, try again.'
+              if(behavior_array.length<=1 || behavior_array.length>20) {
+                  document.getElementById('error-message').innerText = 'Must have between two to twenty behaviors specified, try again.'
                   let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
                   errorModal.show()
                   return
@@ -419,30 +463,41 @@
 
             if(labeling) {
                 switch (event.key) {
-                  case "ArrowLeft":
-                      eel.nextFrame(-1);
-                      break;
-                  case "ArrowRight":
-                      eel.nextFrame(1);
-                      break;
-                  case "ArrowUp":
-                      // Up pressed
-                      break;
-                  case "ArrowDown":
-                      // Down pressed
-                      break;
-              }
+                    case "ArrowLeft":
+                        eel.nextFrame(-surf);
+                        break;
+                    case "ArrowRight":
+                        eel.nextFrame(surf);
+                        break;
+                    case "ArrowUp":
+                        surf = surf*2;
+                        break;
+                    case "ArrowDown":
+                        if(surf!=1) {
+                            surf = Math.trunc(surf/2)
+                        }
+                        break;
+
+                    default:
+                        if(event.keyCode>=49 && event.keyCode<=57) {
+                            eel.label_frame(event.keyCode-49)
+                        } else if(event.keyCode>=65 && event.keyCode<=90) {
+                            eel.label_frame(event.keyCode-65+9)    
+                        }
+                        break;
+                }
 
             }
 
           })
 
-          window.setInterval(function(){
-            load_initial()
-          }, 10000)
-          window.setTimeout(function(){
-            load_initial()
-          }, 1000)
+            window.setInterval(function(){
+                load_initial()
+            }, 10000)
+
+            window.setTimeout(function(){
+                load_initial()
+            }, 1000)
 
         </script>
 
