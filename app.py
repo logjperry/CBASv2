@@ -20,20 +20,288 @@ import h5py
 import torch
 from torch.cuda.amp import autocast, GradScaler
 from torch import nn 
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 from transformers import AutoImageProcessor, AutoModel
+import torch.optim as optim
+
+from sklearn.metrics import classification_report
 
 from decord import VideoReader
 from decord import cpu, gpu
 
-
 from cmap import Colormap
-
 
 import numpy as np
 
 import ctypes
 
 import threading
+
+from classifier_head import classifier
+
+
+class Supervised_Set(Dataset):
+    def __init__(self, training_sets, set_type="train", split=.2, seed=42, behaviors=None, seq_len=15):
+
+        self.paths = training_sets
+
+        self.dcls = []
+        self.lbls = []
+
+        if seq_len % 2 == 0:
+            seq_len += 1
+
+        self.seq_len = seq_len
+        self.hsl = seq_len//2
+        
+        self.behaviors = []
+
+        self.training_sequences = []
+        self.training_labels = []
+
+        self.testing_sequences = []
+        self.testing_labels = []
+
+        self.internal_counter = 0
+
+        for training_set in training_sets:
+
+            with open(training_set, 'r') as file:
+                self.config = yaml.safe_load(file)
+
+            if behaviors is None:
+
+                behaviors = self.config['behaviors']
+
+                for b in behaviors:
+                    if b not in self.behaviors:
+                        self.behaviors.append(b)
+            
+            else:
+                for b in behaviors:
+                    if b not in self.behaviors:
+                        self.behaviors.append(b)
+
+            instances = self.config['labels']
+
+            training_insts = []
+            testing_insts = []
+
+            # generate the same train/test split every time
+            random.seed(seed)
+
+            groups = {}
+
+            total_insts = {b: 0 for b in behaviors}
+
+            for b in behaviors:
+                for i in instances[b]:
+                    
+                    vid_name = os.path.split(i['video'])[1]
+                    group = vid_name.split('_')[1]
+
+                    if group not in groups:
+                        groups[group] = {b:[] for b in behaviors}
+                    
+                    groups[group][b].append(i)
+                    total_insts[b] += 1
+
+
+            keys = list(groups.keys())
+            random.shuffle(keys)
+
+            binsts = {b:[] for b in behaviors}
+            
+            for key in keys:
+                insts = groups[key]
+                for b in behaviors:
+                    binsts[b].extend(insts[b])
+            
+            for b in behaviors:
+                splt = int((1-split)*len(binsts[b]))
+                training_insts.extend(binsts[b][:splt])
+                testing_insts.extend(binsts[b][splt:])
+
+            random.shuffle(training_insts)
+            random.shuffle(testing_insts)
+
+            seqs = []
+            labels = []
+
+            ltrain = len(training_insts)
+            ltest = len(testing_insts)
+            
+            if set_type == 'train':
+
+                for i in range(ltrain):
+
+                    print(f'Generating train instance: {i}/{ltrain}')
+
+                    inst = training_insts[i]
+
+                    start = int(inst['start'])
+                    end = int(inst['end'])
+                    video_path = inst['video']
+
+                    cls_path = video_path.replace('.mp4', '_cls.h5')
+
+                    
+                    with h5py.File(cls_path, 'r') as file:
+                        cls = file['cls'][:]
+
+                        video_mean = np.mean(cls)
+
+                        if cls.shape[0]-self.hsl < start or self.hsl > end:
+                            continue
+
+                        start = max(self.hsl+1, start)-1
+                        end = min(cls.shape[0]-(self.hsl+1), end)-1
+
+                    inds = list(range(start, end))
+
+                    for t in inds:
+
+                        ind = t
+
+                        with h5py.File(cls_path, 'r') as file:
+                            clss = file['cls'][ind-self.hsl:ind+(self.hsl+1)]
+
+                        clss = torch.from_numpy(clss - video_mean).half()
+
+                        
+                        if clss.shape[0] != self.seq_len:
+                            continue
+
+                        seqs.append(clss)
+
+                        label = self.behaviors.index(inst['label'])
+
+                        labels.append(torch.tensor(label).long())
+
+
+
+                all = list(zip(seqs, labels))
+
+                random.shuffle(all)
+
+                seqs, labels = zip(*all)
+
+                self.training_sequences.extend(seqs)
+                self.training_labels.extend(labels)
+
+            elif set_type == 'test':
+
+                
+                for i in range(ltest):
+                    
+                    print(f'Generating test instance: {i}/{ltest}')
+
+                    inst = testing_insts[i]
+
+                    start = int(inst['start'])
+                    end = int(inst['end'])
+                    video_path = inst['video']
+
+                    cls_path = video_path.replace('.mp4', '_cls.h5')
+
+                    video_mean = None
+
+                    
+                    with h5py.File(cls_path, 'r') as file:
+                        cls = file['cls'][:]
+
+                        video_mean = np.mean(cls)
+
+                        if cls.shape[0]-self.hsl < start or self.hsl > end:
+                            continue
+
+                        start = max(self.hsl+1, start)-1
+                        end = min(cls.shape[0]-(self.hsl+1), end)-1
+
+                    inds = list(range(start, end))
+
+                    for t in inds:
+
+                        ind = t
+
+                        with h5py.File(cls_path, 'r') as file:
+                            clss = file['cls'][ind-self.hsl:ind+(self.hsl+1)]
+
+                        clss = torch.from_numpy(clss - video_mean).half()
+
+                        if clss.shape[0] != self.seq_len:
+                            continue
+
+                        seqs.append(clss)
+
+                        label = self.behaviors.index(inst['label'])
+
+                        labels.append(torch.tensor(label).long())
+
+                all = list(zip(seqs, labels))
+
+                random.shuffle(all)
+
+                seqs, labels = map(list, zip(*all))
+                
+                self.testing_sequences.extend(seqs)
+                self.testing_labels.extend(labels)
+
+        if set_type == 'train':
+        
+            all = list(zip(self.training_sequences, self.training_labels))
+            random.shuffle(all)
+            self.training_sequences, self.training_labels = map(list, zip(*all))
+
+            for i in range(len(self.training_sequences)):
+
+                self.dcls.append(self.training_sequences[i])
+
+            self.lbls.extend(self.training_labels)
+        
+        elif set_type == 'test':
+                
+            all = list(zip(self.testing_sequences, self.testing_labels))
+            random.shuffle(all)
+            self.testing_sequences, self.testing_labels = map(list, zip(*all))
+
+            for i in range(len(self.testing_sequences)):
+
+                self.dcls.append(self.testing_sequences[i])
+
+            self.lbls.extend(self.testing_labels)
+
+        self.organized_sequences = {b: [] for b in self.behaviors}
+
+        for l, d in zip(self.lbls, self.dcls):
+            self.organized_sequences[self.behaviors[l.item()]].append(d)
+
+    def __len__(self):
+        return len(self.dcls) + (len(self.behaviors) - len(self.dcls)%len(self.behaviors))
+
+    def __getitem__(self, idx):
+
+        b = self.internal_counter % len(self.behaviors)
+        self.internal_counter += 1
+
+        if self.internal_counter % len(self.behaviors) == 0:
+            self.internal_counter = 0
+
+        dcls = self.organized_sequences[self.behaviors[b]][idx%len(self.organized_sequences[self.behaviors[b]])]
+        lbl = torch.tensor(b).long()
+            
+        return dcls, lbl
+    
+def collate_fn(batch):
+
+    dcls = [item[0] for item in batch]
+    lbls = [item[1] for item in batch]
+
+    dcls = torch.stack(dcls)
+    lbls = torch.stack(lbls)
+
+    return dcls, lbls
 
 class encoder(nn.Module):
 
@@ -87,6 +355,10 @@ start = -1
 
 toggle_infer = False
 
+instance_stack = None
+
+gpu_lock = threading.Lock()
+
 class inference_thread(threading.Thread):
     def __init__(self, name):
         threading.Thread.__init__(self)
@@ -96,31 +368,20 @@ class inference_thread(threading.Thread):
         global stop_threads
         global progresses
         global toggle_infer
+        global gpu_lock
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        enc = encoder(device).to(device)
 
         while True:
 
             progresses = []
-            
             if recordings!='' and toggle_infer:
-
                 videos = []
-
                 sub_dirs = [os.path.join(recordings, d) for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
-
-
                 for sd in sub_dirs:
 
                     sub_sub_dirs = [os.path.join(sd, d) for d in os.listdir(sd) if os.path.isdir(os.path.join(sd, d))]
-
-
                     for ssd in sub_sub_dirs:
-
                         videos.extend([os.path.join(ssd, vid) for vid in os.listdir(ssd) if vid.endswith('.mp4') and not os.path.exists(os.path.join(ssd, vid.replace('.mp4', '_cls.h5')))])
-
 
                 valid_videos = []
                 for v in videos:
@@ -143,50 +404,55 @@ class inference_thread(threading.Thread):
                 m = 100/len(progresses)
 
                 for iv, v in enumerate(videos):
-                    try:
+                    with gpu_lock:
+                        
+                        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                        enc = encoder(device).to(device)
 
-                        cap = cv2.VideoCapture(v)
+                        try:
+                            cap = cv2.VideoCapture(v)
 
-                        if not cap.isOpened():
+                            if not cap.isOpened():
+                                progresses[iv] = -1
+
+                                time.sleep(5)
+                                continue
+
+                            vr = VideoReader(v, ctx=cpu(0))
+                            
+                            frames = vr.get_batch(range(0, len(vr), 1)).asnumpy()
+
+                            frames = torch.from_numpy(frames[:, :, :, 1]/255).half()
+
+                            batch_size = 1024
+
+                            clss = []
+
+                            for i in range(0, len(frames), batch_size):
+                                batch = frames[i:i+batch_size]
+
+                                progresses[iv] = (i)/len(frames)*m
+
+                                with torch.no_grad() and autocast():
+                                    out = enc(batch.unsqueeze(1).to(device))
+
+                                out = out.squeeze(1).to('cpu')
+                                clss.extend(out)
+
+                            file_path = os.path.splitext(v)[0]+'_cls.h5'
+
+                            with h5py.File(file_path, 'w') as file:
+                                file.create_dataset('cls', data=torch.stack(clss).numpy())
+
+                            progresses[iv] = m
+                            
+                        except Exception as e:
                             progresses[iv] = -1
-
-                            time.sleep(5)
+                            print('Error processing video:', v)
                             continue
 
-                        vr = VideoReader(v, ctx=cpu(0))
-                        
-                        frames = vr.get_batch(range(0, len(vr), 1)).asnumpy()
+                    time.sleep(1)
 
-                        frames = torch.from_numpy(frames[:, :, :, 1]/255).half()
-
-                        batch_size = 1024
-
-                        clss = []
-
-                        for i in range(0, len(frames), batch_size):
-                            batch = frames[i:i+batch_size]
-
-                            progresses[iv] = (i)/len(frames)*m
-
-                            with torch.no_grad() and autocast():
-                                out = enc(batch.unsqueeze(1).to(device))
-
-                            out = out.squeeze(1).to('cpu')
-                            clss.extend(out)
-
-                        file_path = os.path.splitext(v)[0]+'_cls.h5'
-
-                        with h5py.File(file_path, 'w') as file:
-                            file.create_dataset('cls', data=torch.stack(clss).numpy())
-
-                        progresses[iv] = m
-                        
-                    except Exception as e:
-                        progresses[iv] = -1
-                        print('Error processing video:', v)
-                        continue
-
-                
                 time.sleep(1)
             else:
                 time.sleep(1)
@@ -208,8 +474,176 @@ class inference_thread(threading.Thread):
             ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
             print('Exception raise failure')
 
+class training_thread(threading.Thread):
+    def __init__(self, name, config, dataset, batch_size, learning_rate, epochs, sequence_length):
+        threading.Thread.__init__(self)
+        self.name = name
+
+        self.config = config
+        self.dataset = dataset
+
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.epochs = epochs 
+        self.sequence_length = sequence_length
+        
+    def off_diagonal(self, x):
+        n, m = x.shape
+        assert n == m
+        return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+             
+    def run(self):
+        global toggle_infer
+        global gpu_lock
+
+        with gpu_lock:
+
+            datasets, dataset = os.path.split(os.path.split(self.config)[0])
+            models = os.path.join(os.path.split(datasets)[0], 'models')
+
+            model_dir = os.path.join(models, dataset)
+            if not os.path.exists(model_dir):
+                os.mkdir(model_dir)
+
+            model_path = os.path.join(model_dir, 'model.pth')
+            performance_path = os.path.join(model_dir, 'performance.yaml')
+
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            batch_size=self.batch_size
+            lr=self.learning_rate
+
+            train_set = Supervised_Set([self.dataset], split=.25, set_type='train', seed=42, seq_len=self.sequence_length)
+            test_set = Supervised_Set([self.dataset], split=.25, set_type='test', seed=42, seq_len=self.sequence_length)
+
+            behaviors = train_set.behaviors
+
+            train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+            test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+
+            criterion = nn.CrossEntropyLoss()
+
+            best_f1 = 0
+            best_report = None
+
+            epochs = self.epochs
+
+            for trials in range(50):
+
+                model = classifier(in_features=768, out_features=len(behaviors), seq_len=self.sequence_length).to(device)
+
+                optimizer = optim.Adam(model.parameters(), lr=lr)
+
+                for e in range(epochs):
+
+                    for t, param_group in enumerate(optimizer.param_groups):
+                        param_group["lr"] = (epochs-e)/epochs * 0.0005 + (e/epochs) * 0.00001
+
+                    for i, (d, l) in enumerate(train_loader):
+                        
+                        d = d.to(device).float()
+                        l = l.to(device)
+
+                        optimizer.zero_grad()
+
+                        B = d.shape[0]
+
+                        lstm_logits, linear_logits, rawm = model(d)
+
+                        logits = lstm_logits + linear_logits
+
+                        inv_loss = criterion(logits, l)
+                        
+                        rawm = (rawm - rawm.mean(dim=0))
+
+                        covm = (rawm @ rawm.T)/rawm.shape[0]
+                        covm_loss = torch.sum(torch.pow(self.off_diagonal(covm), 2))/rawm.shape[1]
+
+                        loss = inv_loss + covm_loss
+
+                        loss.backward()
+                        optimizer.step()
+
+                        print(f'F1: {best_f1} Epoch: {e} Batch: {i} Total Loss: {loss.item()}')
+
+                    actuals = []
+                    predictions = []
+
+                    for i, (d, l) in enumerate(test_loader):
+                            
+                        d = d.to(device).float()
+                        l = l.to(device)
+
+                        with torch.no_grad():
+
+                            lstm_logits, linear_logits = model.forward_nodrop(d)
+
+                            logits = lstm_logits + linear_logits
+
+                        actuals.extend(l.cpu().numpy())
+                        predictions.extend(logits.argmax(1).cpu().numpy())
+
+
+                    report_dict = classification_report(actuals, predictions, target_names=behaviors, output_dict=True)
+
+                    wf1score = report_dict['weighted avg']['f1-score']
+
+                    if best_f1<wf1score:
+                        best_f1 = wf1score
+                        best_report = report_dict
+
+                        torch.save(model, model_path)
+
+
+            if best_report:
+                with open(performance_path, 'w+') as file:
+                    yaml.dump(best_report, file, allow_unicode=True)
+
+                for b in behaviors:
+                    #config_path, behavior, group, value
+                    update_metrics(self.config, b, 'Precision', round(best_report[b]['precision'], 2))
+                    update_metrics(self.config, b, 'Recall', round(best_report[b]['recall'], 2))
+                    update_metrics(self.config, b, 'F1 Score', round(best_report[b]['f1-score'], 2))
+                
+                with open(self.config, 'r+') as file:
+                    config = yaml.safe_load(file)
+                
+                config['model'] = model_path
+
+                with open(self.config, 'w+') as file:
+                    yaml.dump(config, file, allow_unicode=True)
+
+
+        
+          
+    def get_id(self):
+ 
+        # returns id of the respective thread
+        if hasattr(self, '_thread_id'):
+            return self._thread_id
+        for id, thread in threading._active.items():
+            if thread is self:
+                return id
+  
+    def raise_exception(self):
+        thread_id = self.get_id()
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
+              ctypes.py_object(SystemExit))
+        if res > 1:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+            print('Exception raise failure')
+
 
 thread = inference_thread('inference')
+
+tthread = None
+
+def tab20_map(val):
+
+    if val<10:
+        return val*2
+    else:
+        return (val - 10)*2 + 1
 
 def add_instance():
     global label_videos 
@@ -221,6 +655,8 @@ def add_instance():
 
     global label_dict
     global col_map
+
+    global instance_stack
 
     stemp = min(start, label_index)
     eInd = max(start, label_index)
@@ -241,20 +677,28 @@ def add_instance():
                 elif eInd < l['end'] and eInd > l['start']:
                     label = -1
                     raise Exception('Overlapping behavior region! Behavior not recorded.')
-                
+          
+    behavior = label_dict['behaviors'][label]
+
     instance = {
         'video': label_videos[label_vid_index],
         'start': sInd,
-        'end': eInd
+        'end': eInd,
+        'label': behavior
     }
 
-    behavior = label_dict['behaviors'][label]
 
     label_dict['labels'][behavior].append(instance)
+
+    instance_stack.append(instance)
 
     # save the label dictionary
     with open(label_dict_path, 'w+') as file:
         yaml.dump(label_dict, file, allow_unicode=True)
+
+    update_counts()
+
+
 
 def fill_colors(frame):
     global label_videos 
@@ -278,7 +722,7 @@ def fill_colors(frame):
 
         sub_labels = labels[b]
 
-        color = str(col_map(i)).lstrip('#')
+        color = str(col_map(tab20_map(i))).lstrip('#')
         color = np.flip(np.array([int(color[i:i+2], 16) for i in (0, 2, 4)]))
 
         for l in sub_labels:
@@ -290,10 +734,10 @@ def fill_colors(frame):
             marker_posS = int(frame.shape[1] * sInd/amount_of_frames)
             marker_posE = int(frame.shape[1] * eInd/amount_of_frames)
 
-            frame[-19:, marker_posS:marker_posE+1,] = color
+            frame[-49:, marker_posS:marker_posE+1,] = color
 
     if label!=-1:
-        color = str(col_map(label)).lstrip('#')
+        color = str(col_map(tab20_map(label))).lstrip('#')
         color = np.flip(np.array([int(color[i:i+2], 16) for i in (0, 2, 4)]))
         
         stemp = min(start, label_index)
@@ -304,7 +748,7 @@ def fill_colors(frame):
         marker_posS = int(frame.shape[1] * sInd/amount_of_frames)
         marker_posE = int(frame.shape[1] * eInd/amount_of_frames)
 
-        frame[-19:, marker_posS:marker_posE+1,] = color
+        frame[-49:, marker_posS:marker_posE+1,] = color
 
     return frame
             
@@ -463,6 +907,20 @@ def create_dataset(dataset_directory, name, behaviors, recordings):
         label_dict = labelconfig
 
         return True
+
+@eel.expose 
+def train_model(dataset_directory, name, batch_size, learning_rate, epochs, sequence_length): 
+    #name, config, dataset, batch_size, learning_rate, epochs, sequence_length
+
+    global tthread 
+
+    config = os.path.join(dataset_directory, name, 'config.yaml')
+    dataset = os.path.join(dataset_directory, name, 'labels.yaml')
+
+    tthread = training_thread(name, config, dataset, int(batch_size), float(learning_rate), int(epochs), int(sequence_length))
+
+    tthread.start()
+
 
 @eel.expose
 def ping_cameras(camera_directory):
@@ -715,6 +1173,36 @@ def get_record_tree():
     return rt
 
 @eel.expose 
+def pop_instance():
+
+    global instance_stack 
+    global label_dict
+
+    last_inst = instance_stack[-1]
+
+    beh = None 
+    ind = None
+
+    for b in label_dict['behaviors']:
+        for i,inst in enumerate(label_dict['labels'][b]):
+            if inst['video']==last_inst['video'] and inst['start']==last_inst['start'] and inst['end']==last_inst['end']:
+                beh = b 
+                ind = i 
+    if beh==None or ind==None:
+        return 
+    else:
+        del label_dict['labels'][beh][ind]
+        
+    # save the label dictionary
+    with open(label_dict_path, 'w+') as file:
+        yaml.dump(label_dict, file, allow_unicode=True)
+
+    update_counts()
+
+    nextFrame(0)
+
+
+@eel.expose 
 def label_frame(value):
     
     global label_dict
@@ -747,12 +1235,17 @@ def nextFrame(shift):
     global label 
     global start
 
+    if shift<=0:
+        shift-=1
+
     if label_capture.isOpened():
 
         amount_of_frames = label_capture.get(cv2.CAP_PROP_FRAME_COUNT)
 
         label_index+=shift 
         label_index%=amount_of_frames
+
+
 
         label_capture.set(cv2.CAP_PROP_POS_FRAMES, label_index)
 
@@ -762,25 +1255,25 @@ def nextFrame(shift):
 
             frame = cv2.resize(frame, (500, 500))
 
-            temp = np.zeros((frame.shape[0]+20, frame.shape[1], frame.shape[2]))
+            temp = np.zeros((frame.shape[0]+50, frame.shape[1], frame.shape[2]))
 
-            temp[:-20,:,:] = frame 
+            temp[:-50,:,:] = frame 
 
-            temp[-20,:,:] = 0
+            temp[-50,:,:] = 0
 
-            temp[-19:,:,:] = 100
+            temp[-49:,:,:] = 100
 
             temp = fill_colors(temp)
 
             marker_pos = int(frame.shape[1] * label_index/amount_of_frames)
 
             if marker_pos!=0 and marker_pos!=frame.shape[1]-1:
-                temp[-17:-2, marker_pos-1:marker_pos+2, :] = 255
+                temp[-45:-5, marker_pos-1:marker_pos+2, :] = 255
             else:
                 if marker_pos==0:
-                    temp[-17:-2, marker_pos:marker_pos+2, :] = 255
+                    temp[-45:-5, marker_pos:marker_pos+2, :] = 255
                 else:
-                    temp[-17:-2, marker_pos-1:marker_pos+1, :] = 255
+                    temp[-45:-5, marker_pos-1:marker_pos+1, :] = 255
 
 
             ret, frame = cv2.imencode('.jpg', temp)
@@ -845,12 +1338,15 @@ def start_labeling(root, dataset_name):
     global label 
     global start
 
+    global instance_stack
+
     label_capture = None
     label_videos = []
     label_vid_index = -1
     label_index = -1
     label = -1 
     start = -1
+    instance_stack = []
 
     dataset_config = os.path.join(root, dataset_name,'config.yaml')
     label_file = os.path.join(root, dataset_name,'labels.yaml')
@@ -860,7 +1356,6 @@ def start_labeling(root, dataset_name):
     cm = Colormap('seaborn:tab20')
 
     col_map = cm
-
 
     if not os.path.exists(label_dict_path):
         return False
@@ -908,7 +1403,36 @@ def start_labeling(root, dataset_name):
         
     nextVideo(1)
 
-    return label_dict['behaviors'], [str(col_map(i)) for i in range(len(label_dict['behaviors']))]
+
+    return label_dict['behaviors'], [str(col_map(tab20_map(i))) for i in range(len(label_dict['behaviors']))]
+
+@eel.expose 
+def update_counts():
+    global label_dict_path
+    global label_dict
+
+    config_path = os.path.join(os.path.split(label_dict_path)[0], 'config.yaml')
+
+    for b in label_dict['behaviors']:
+        insts = label_dict['labels'][b]
+
+        update_metrics(config_path, b, 'Train #', int(round(len(insts)*.75)))
+        update_metrics(config_path, b, 'Test #', int(round(len(insts)*.25)))
+
+        eel.updateCount(b, len(insts))()
+
+
+@eel.expose 
+def update_metrics(config_path, behavior, group, value):
+
+    with open(config_path, 'r') as file:
+        config = yaml.safe_load(file)
+
+    config['metrics'][behavior][group] = value 
+
+    with open(config_path, 'w+') as file:
+        yaml.dump(config, file, allow_unicode=True)
+
 
 @eel.expose
 def get_active_streams():
@@ -934,6 +1458,7 @@ def kill_streams():
     global active_streams
     global stop_threads
     global thread
+    global tthread 
 
     for stream in active_streams.keys():
         active_streams[stream].communicate(input=b'q')
@@ -941,6 +1466,10 @@ def kill_streams():
     stop_threads = True
     thread.raise_exception()
     thread.join()
+
+    if tthread:
+        tthread.raise_exception() 
+        tthread.join()
 
 eel.start('frontend/index.html', mode='electron', block=False)
 

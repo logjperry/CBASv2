@@ -65,6 +65,47 @@
             </div>
           </div>
 
+		  <div class="modal" tabindex="-1" id="trainModal">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title" id="tm-dataset"></h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  
+					<div class="container">
+                        <div class="row justify-content-center align-items-center g-2">
+                            <div class="col">
+                                <p>Sequence Length: </p>
+                                <input type="number" class="form-control" id="tm-seqlen" aria-describedby="directory" placeholder="31" step="2" min="5" max="127">
+                            </div>
+                            <div class="col">
+                                <p>Batch Size: </p>
+                                <input type="number" class="form-control" id="tm-batchsize" aria-describedby="directory" placeholder="512" step="32" min="32" max="2048">
+                            </div>
+                        </div>
+                        <div class="row justify-content-center align-items-center g-2">
+                            <div class="col">
+                                <p>Learning Rate: </p>
+                                <input type="number" class="form-control" id="tm-lrate" aria-describedby="directory" placeholder="0.0001" step=".0001" min="0" max="1">
+                            </div>
+                            <div class="col">
+                                <p>Epochs: </p>
+                                <input type="number" class="form-control" id="tm-epochs" aria-describedby="directory" placeholder="10" step="1" min="1" max="100">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                  <button type="button" class="btn btn-primary" onclick="trainDataset()">Train</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="modal" tabindex="-1" id="errorModal">
             <div class="modal-dialog modal-dialog-centered">
               <div class="modal-content">
@@ -101,9 +142,9 @@
 
         <div class="d-flex col align-items-center justify-content-center" style="height: max-content; width: 100vw;">
 
-            <div class="card text-start"  id="label"  style="height: 800px; width: 95vw; min-width: 750px; display: none;background-color: #343a40;">
+            <div class="card text-start"  id="label"  style="height: 700px; width: 95vw; min-width: 750px; display: none;background-color: #343a40;">
 
-                <div class="card-body d-flex col align-items-center justify-content-center" style="padding: 20px;">
+                <div class="card-body d-flex col align-items-center justify-content-center" style="padding: 10px;">
                     <div class="container-fluid">
                         <div class="row" style="padding-bottom: 10px;">
                             <div class="col">
@@ -112,17 +153,11 @@
                                 </div>
                             </div>
                             <div class="col">
-                                <div id="controls" style="min-width: 156px; width: 20vw; height: 520px;">
+                                <div id="controls" style="min-width: 156px;">
 
                                 </div>
                             </div>
         
-                        </div>
-                        <div class="row" style="height: 200px; width:710px; background-color: #adb5bd;">
-                            <div id="scoreboard">
-
-
-                            </div>
                         </div>
         
                     </div>
@@ -138,7 +173,7 @@
 
         <script type="text/javascript">
           
-          const ipc = window.ipcRendere
+          const ipc = window.ipcRenderer
 
 
           let loaded = false
@@ -147,6 +182,8 @@
           let labeling = false
           
           let datasetModal = new bootstrap.Modal(document.getElementById('addDataset'))
+		  
+          let trainModal = new bootstrap.Modal(document.getElementById('trainModal'))
 
           let dir_children = new Object();
 
@@ -162,10 +199,13 @@
               routing = true 
               window.open('./record.html', '_self');
           }
+
           function routeLabelTrain() {
               routing = true 
               window.open('./label-train.html', '_self');
           }
+
+		  
             
           function load_initial() {
               eel.datasets(read('data_sets'))().then( function(data) {
@@ -188,14 +228,32 @@
 
                     let mheaders = ['Train #', 'Test #', 'Precision','Recall', 'F1 Score']
 
-                    let html = `
+					let html = `
                     <div class="row-auto"  style="padding:15px">
                         <div class="card shadow text-light bg-light" style="width: 700px; height:max-content;">
                             <div class="card-header bg-dark">
                                 <h1 class="display-6">` + name +`</h1>
-                                <button class="btn btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
+                                <button class="btn btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:105px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
+                                <button class="btn btn-outline-success position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="makeTrainModal('`+name+`')">Train</button>
                             </div>
                     ` 
+
+					console.log(sets[n]['model'])
+
+					if(sets[n]['model'] != null) {
+						html = `
+						<div class="row-auto"  style="padding:15px">
+							<div class="card shadow text-light bg-light" style="width: 700px; height:max-content;">
+								<div class="card-header bg-dark">
+									<h1 class="display-6">` + name +`</h1>
+									<button class="btn btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:195px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
+									<button class="btn btn-outline-success position-absolute top-0 end-0" style='width:80px;margin-right:105px;margin-top:15px' type="submit" onclick="makeTrainModal('`+name+`')">Train</button>
+									<button class="btn btn-outline-warning position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="makeInferModal('`+name+`')">Infer</button>
+								</div>
+						` 
+					}
+
+                    
 
                     for(b=0;b<behaviors.length;b++) {
 
@@ -232,19 +290,19 @@
                                 <div class="col h6 text-dark">
                                   `+behaviors[b]+`
                                 </div>
-                                <div class="col h6 text-dark">
+                                <div class="col h6 text-dark" id="`+names[i]+'-'+behaviors[b]+'-train'+`">
                                   `+metrics[behaviors[b]][mheaders[0]]+`
                                 </div>
-                                <div class="col h6 text-dark">
+                                <div class="col h6 text-dark" id="`+names[i]+'-'+behaviors[b]+'-test'+`">
                                   `+metrics[behaviors[b]][mheaders[1]]+`
                                 </div>
-                                <div class="col h6 text-dark">
+                                <div class="col h6 text-dark" id="`+names[i]+'-'+behaviors[b]+'-precision'+`">
                                     `+metrics[behaviors[b]][mheaders[2]]+`
                                 </div>
-                                <div class="col h6 text-dark">
+                                <div class="col h6 text-dark" id="`+names[i]+'-'+behaviors[b]+'-recall'+`">
                                   `+metrics[behaviors[b]][mheaders[3]]+`
                                 </div>
-                                <div class="col h6 text-dark">
+                                <div class="col h6 text-dark" id="`+names[i]+'-'+behaviors[b]+'-fscore'+`">
                                   `+metrics[behaviors[b]][mheaders[4]]+`
                                 </div>
                               </div>
@@ -266,10 +324,48 @@
 
           eel.expose(updateLabelImageSrc);
           function updateLabelImageSrc(val) {
-              console.log(val)
               let elem = document.getElementById('label-image');
               elem.src = "data:image/jpeg;base64, " + val
           }
+
+		  eel.expose(updateMetrics);
+		  function updateMetrics(dataset, behavior, group, value) {
+              let elem = document.getElementById(dataset+'-'+behavior+'-'+group);
+			  elem.innerHTML = `"`+value`"`
+		  }
+
+		  eel.expose(updateCount);
+		  function updateCount(behavior, value) {
+			let elem = document.getElementById('controls-'+behavior+'-count');
+			if(elem != null) {
+				elem.innerHTML = value
+			}
+		  }
+
+		  function trainDataset() {
+
+			let dataset = document.getElementById('tm-dataset').innerHTML
+			let batchsize = document.getElementById('tm-batchsize').value
+			let seqlen = document.getElementById('tm-seqlen').value
+			let lrate = document.getElementById('tm-lrate').value
+			let epochs = document.getElementById('tm-epochs').value
+			
+
+			eel.train_model(read('data_sets'), dataset, batchsize, lrate, epochs, seqlen)
+
+			trainModal.hide()
+			trainModal = new bootstrap.Modal(document.getElementById('trainModal'))
+
+		  }
+
+		  function makeTrainModal(name) {
+
+			document.getElementById('tm-dataset').innerHTML = name
+
+			trainModal.show()
+
+		  }
+
 
           function labelModal(name) {
 
@@ -282,29 +378,43 @@
                   behaviors = res[0]
                   colors = res[1]
 
-                  for(i=0;i<20-behaviors.length;i++) {
-                    behaviors.push('behavior '+i+"")
-                  }
+				  controls.innerHTML += `
+                            <div class="row">
+                                <div class="col h6 text-light text-decoration-underline" style="max-width: 20vw">
+                                    Behavior
+                                </div>
+                                <div class="col d-flex justify-content-center align-items-center h6 text-light text-decoration-underline" style=" max-width:30px; margin-right:30px">
+									Code
+                                </div>
+                                <div class="col d-flex justify-content-center align-items-center h6 text-light text-decoration-underline" style="max-width:4vw">
+                                  	Count
+                                </div>
+                            </div>`
 
+                  
                   for(i=0;i<behaviors.length;i++) {
 
-                    let k = i
+                    let k = i+1
 
-                    if(i>9){
+                    if(i>=9){
                         k = String.fromCharCode(97+i-9)
                     }
 
                     controls.innerHTML += `
                             <div class="row">
-                                <div class="col h6 text-light">
+                                <div class="col h6 text-light" style="max-width: 20vw">
                                     `+behaviors[i]+`
                                 </div>
-                                <div class="col h6 text-center" style="background-color:`+colors[i]+`;">
+                                <div class="col d-flex justify-content-center align-items-center h6" style="background-color:`+colors[i]+`; max-width:30px; margin-right:30px">
                                     `+k+`
+                                </div>
+                                <div class="col d-flex justify-content-center align-items-center h6 text-light" id="controls-`+behaviors[i]+'-'+'count'+`" style="max-width:4vw">
+                                  0
                                 </div>
                             </div>
                                 `
                   }
+
 
                   document.getElementById('datasets').style.display = 'none'
                   document.getElementById('label').style.display = 'flex'
@@ -315,8 +425,11 @@
                   errorModal.show()
               }
             })
+			
+			setTimeout(function() {
+				eel.update_counts()()
+			}, 1000)
 
-        
           }
 
           function createDataset() {
@@ -345,16 +458,23 @@
                 for(j=0;j<subdirs.length;j++) {
                   let elem = document.getElementById(dirs[i]+'-'+subdirs[j])
 
+                  console.log(dirs[i]+'-'+subdirs[j])
+
                   if(elem.checked) {
                     recordings.push(dirs[i]+'\\'+subdirs[j])
                   } 
                 }
               }
 
+              console.log(recordings)
+
+
               let name = document.getElementById('dataset-name').value
               let behaviors = document.getElementById('dataset-behaviors').value
 
               let behavior_array = behaviors.split(';')
+
+              console.log(behavior_array)
 
               if(behavior_array.length<=1 || behavior_array.length>20) {
                   document.getElementById('error-message').innerText = 'Must have between two to twenty behaviors specified, try again.'
@@ -438,7 +558,7 @@
                     for(j=0;j<subdirs.length;j++) {
                       elem.innerHTML += `
                       <div class="form-check" style='margin-left:10px'>
-                        <input class="form-check-input" type="checkbox" value="" id="`+dirs[i]+`-`+subdirs[i]+`">
+                        <input class="form-check-input" type="checkbox" value="" id="`+dirs[i]+`-`+subdirs[j]+`">
                         <label class="form-check-label" for="flexCheckDefault">
                           `+ subdirs[j] +`
                         </label>
@@ -464,10 +584,18 @@
             if(labeling) {
                 switch (event.key) {
                     case "ArrowLeft":
-                        eel.nextFrame(-surf);
+						if(event.ctrlKey) {
+							eel.nextVideo(-1);
+						} else {
+                        	eel.nextFrame(-surf);
+						}
                         break;
                     case "ArrowRight":
-                        eel.nextFrame(surf);
+						if(event.ctrlKey) {
+							eel.nextVideo(1);
+						} else {
+                        	eel.nextFrame(surf);
+						}
                         break;
                     case "ArrowUp":
                         surf = surf*2;
@@ -477,7 +605,9 @@
                             surf = Math.trunc(surf/2)
                         }
                         break;
-
+					case "Backspace": 
+						eel.pop_instance();
+						break;
                     default:
                         if(event.keyCode>=49 && event.keyCode<=57) {
                             eel.label_frame(event.keyCode-49)
