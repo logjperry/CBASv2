@@ -53,13 +53,35 @@
                   <input type="text" class="form-control" id="dataset-behaviors" aria-describedby="directory" placeholder="e.g. eating; drinking; background" style="margin-bottom: 10px">
 
                   <p>Directories to label: </p>
-                  <div id="recording_tree">
+                  <div id="ad-recording-tree">
                   </div>
 
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                   <button type="button" class="btn btn-primary" onclick="createDataset()">Create</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+		  <div class="modal" tabindex="-1" id="inferenceModal">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">Start Classification</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+					<p>Model trained on:</p>
+					<p class="h6" id="im-dataset" style="padding-bottom: 20px;"></p>
+					<p>Directories to Classify: </p>
+					<div id="im-recording-tree">
+					</div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                  <button type="button" class="btn btn-primary" onclick="startClassification()">Start</button>
                 </div>
               </div>
             </div>
@@ -185,6 +207,8 @@
 		  
           let trainModal = new bootstrap.Modal(document.getElementById('trainModal'))
 
+		  let inferenceModal = new bootstrap.Modal(document.getElementById('inferenceModal'))
+
           let dir_children = new Object();
 
           let surf = 1;
@@ -238,7 +262,6 @@
                             </div>
                     ` 
 
-					console.log(sets[n]['model'])
 
 					if(sets[n]['model'] != null) {
 						html = `
@@ -248,7 +271,7 @@
 									<h1 class="display-6">` + name +`</h1>
 									<button class="btn btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:195px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
 									<button class="btn btn-outline-success position-absolute top-0 end-0" style='width:80px;margin-right:105px;margin-top:15px' type="submit" onclick="makeTrainModal('`+name+`')">Train</button>
-									<button class="btn btn-outline-warning position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="makeInferModal('`+name+`')">Infer</button>
+									<button class="btn btn-outline-warning position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="showInferenceModal('`+name+`')">Infer</button>
 								</div>
 						` 
 					}
@@ -458,7 +481,6 @@
                 for(j=0;j<subdirs.length;j++) {
                   let elem = document.getElementById(dirs[i]+'-'+subdirs[j])
 
-                  console.log(dirs[i]+'-'+subdirs[j])
 
                   if(elem.checked) {
                     recordings.push(dirs[i]+'\\'+subdirs[j])
@@ -466,7 +488,6 @@
                 }
               }
 
-              console.log(recordings)
 
 
               let name = document.getElementById('dataset-name').value
@@ -474,7 +495,6 @@
 
               let behavior_array = behaviors.split(';')
 
-              console.log(behavior_array)
 
               if(behavior_array.length<=1 || behavior_array.length>20) {
                   document.getElementById('error-message').innerText = 'Must have between two to twenty behaviors specified, try again.'
@@ -534,7 +554,7 @@
               eel.get_record_tree()(function (rt){
 
                 if(rt) {
-                  let elem = document.getElementById('recording_tree')
+                  let elem = document.getElementById('ad-recording-tree')
 
                   dir_children = new Object()
 
@@ -578,6 +598,101 @@
               })
               
           }
+
+
+		
+          function showInferenceModal(dataset) {
+
+			document.getElementById('im-dataset').innerHTML = dataset
+
+			eel.get_record_tree()(function (rt){
+
+			if(rt) {
+				let elem = document.getElementById('im-recording-tree')
+
+				dir_children = new Object()
+
+				elem.innerHTML = ''
+
+				let dirs = Object.keys(rt)
+
+				for(i=0;i<dirs.length;i++) {
+				subdirs = rt[dirs[i]]
+
+				dir_children[dirs[i]] = subdirs
+
+				elem.innerHTML += `
+				<div class="form-check">
+					<input class="form-check-input" type="checkbox" value="" id="`+dirs[i]+`" onChange="updateChildren(`+dirs[i]+`)">
+					<label class="form-check-label" for="flexCheckDefault">
+					`+ dirs[i] +`
+					</label>
+				</div>
+				`
+				for(j=0;j<subdirs.length;j++) {
+					elem.innerHTML += `
+					<div class="form-check" style='margin-left:10px'>
+					<input class="form-check-input" type="checkbox" value="" id="`+dirs[i]+`-`+subdirs[j]+`">
+					<label class="form-check-label" for="flexCheckDefault">
+						`+ subdirs[j] +`
+					</label>
+					</div>
+					`
+				}
+
+				}
+
+				inferenceModal.show()
+			} else {
+				document.getElementById('error-message').innerText = 'No recordings yet, try this again when you have recorded videos.'
+				let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+				errorModal.show()
+			}
+
+			})
+
+			}
+
+			
+			function startClassification() {
+				dataset = document.getElementById('im-dataset').innerHTML
+
+				let dirs = Object.keys(dir_children)
+
+				if(dirs.length==0) {
+					document.getElementById('error-message').innerText = 'No recordings selected, try again.'
+					let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+					errorModal.show()
+					return
+				}
+
+				let recordings = []
+
+				for(i=0;i<dirs.length;i++) {
+					let elem = document.getElementById(dirs[i])
+
+					if(elem.checked) {
+					recordings.push(dirs[i])
+					continue
+					} 
+
+					let subdirs = dir_children[dirs[i]]
+
+					for(j=0;j<subdirs.length;j++) {
+					let elem = document.getElementById(dirs[i]+'-'+subdirs[j])
+
+					if(elem.checked) {
+						recordings.push(dirs[i]+'\\'+subdirs[j])
+					} 
+					}
+				}
+
+				eel.start_classification(read('data_sets'), dataset, recordings)
+
+				inferenceModal.hide()
+				inferenceModal = new bootstrap.Modal(document.getElementById('inferenceModal'))
+			}
+
 
           window.addEventListener("keydown", (event) => {
 

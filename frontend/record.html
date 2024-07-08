@@ -271,7 +271,6 @@
             eel.expose(inferLoadBar);
             function inferLoadBar(progresses) {
 
-                console.log(progresses)
 
                 if(progresses) {
 
@@ -490,7 +489,6 @@
                                 camera_dict = JSON.parse(camera_dict)
                             }
 
-                            console.log(camera_dict)
 
                             camera_dict[name] = frame
                             window.localStorage.setItem('camera/'+name, JSON.stringify(camera_dict))

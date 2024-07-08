@@ -33,6 +33,7 @@ from decord import cpu, gpu
 from cmap import Colormap
 
 import numpy as np
+import pandas as pd
 
 import ctypes
 
@@ -359,6 +360,8 @@ instance_stack = None
 
 gpu_lock = threading.Lock()
 
+classification_threads = []
+
 class inference_thread(threading.Thread):
     def __init__(self, name):
         threading.Thread.__init__(self)
@@ -528,7 +531,7 @@ class training_thread(threading.Thread):
 
             epochs = self.epochs
 
-            for trials in range(50):
+            for trials in range(10):
 
                 model = classifier(in_features=768, out_features=len(behaviors), seq_len=self.sequence_length).to(device)
 
@@ -564,7 +567,7 @@ class training_thread(threading.Thread):
                         loss.backward()
                         optimizer.step()
 
-                        print(f'F1: {best_f1} Epoch: {e} Batch: {i} Total Loss: {loss.item()}')
+                        #print(f'F1: {best_f1} Epoch: {e} Batch: {i} Total Loss: {loss.item()}')
 
                     actuals = []
                     predictions = []
@@ -613,8 +616,159 @@ class training_thread(threading.Thread):
                 with open(self.config, 'w+') as file:
                     yaml.dump(config, file, allow_unicode=True)
 
+                config_path = os.path.join(os.path.split(model_path)[0], 'config.yaml')
+
+                config = {
+                    'seq_len': self.sequence_length,
+                    'behaviors': behaviors
+                }
+
+                with open(config_path, 'w+') as file:
+                    yaml.dump(config, file, allow_unicode=True)
 
         
+          
+    def get_id(self):
+ 
+        # returns id of the respective thread
+        if hasattr(self, '_thread_id'):
+            return self._thread_id
+        for id, thread in threading._active.items():
+            if thread is self:
+                return id
+  
+    def raise_exception(self):
+        thread_id = self.get_id()
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
+              ctypes.py_object(SystemExit))
+        if res > 1:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+            print('Exception raise failure')
+
+
+class classification_thread(threading.Thread):
+    def __init__(self, model_path, whitelist):
+        threading.Thread.__init__(self)
+
+        self.model_path = model_path 
+        self.whitelist = whitelist
+             
+    def run(self):
+        global toggle_infer
+        global gpu_lock
+
+        while True:
+
+            time.sleep(5)
+
+            with gpu_lock:
+
+                dataset_name = os.path.split(os.path.split(self.model_path)[0])[1]
+
+                config_path = os.path.join(os.path.split(self.model_path)[0], 'config.yaml')
+                
+                with open(config_path, 'r+') as file:
+                    config = yaml.safe_load(file)
+
+                seq_len = config['seq_len']
+                behaviors = config['behaviors']
+
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                
+                model = torch.load(self.model_path)
+
+                model.eval()
+
+                model.to(device)
+
+                all_videos = []
+
+                if recordings=='':
+                    continue
+                else:
+                    sub_dirs = [os.path.join(recordings, d) for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
+
+
+                    if len(sub_dirs)==0:
+                        continue 
+                    else:
+
+                        for sd in sub_dirs:
+
+                            sub_sub_dirs = [os.path.join(sd, d) for d in os.listdir(sd) if os.path.isdir(os.path.join(sd, d))]
+
+                            for ssd in sub_sub_dirs:
+
+                                all_videos.extend([os.path.join(ssd, v) for v in os.listdir(ssd) if v.endswith('_cls.h5')])
+
+                valid_videos = []
+                for v in all_videos:
+                    for wl in self.whitelist:
+                        if wl in v:
+                            valid_videos.append(v)
+
+                for clsfile in valid_videos:
+
+                    outputfile = clsfile.replace('_cls.h5', '_'+dataset_name+'_outputs.csv')
+
+
+                    if os.path.exists(outputfile):
+                        continue
+                        
+                    with h5py.File(clsfile, 'r') as file:
+                        cls = np.array(file['cls'][:])
+
+                    cls = torch.from_numpy(cls - np.mean(cls, axis=0)).half()
+
+
+                    predictions = []
+
+                    batch = []
+
+                    if len(cls)<seq_len:
+                        continue
+
+                    for ind in range(seq_len//2, len(cls)-seq_len//2):
+
+
+                        batch.append(cls[ind-seq_len//2:ind+seq_len//2+1])
+
+                        if len(batch)>=4096 or ind==len(cls)-seq_len//2-1:
+
+                            batch = torch.stack(batch)
+
+                            with torch.no_grad() and autocast():
+
+                                lstm_logits, linear_logits = model.forward_nodrop(batch.to(device))
+
+                                logits = lstm_logits + linear_logits
+
+                                probs = torch.softmax(logits, dim=1)
+
+                                predictions.extend(probs.detach().cpu().numpy())
+                            
+                            batch = []
+
+                    total_predictions = []
+
+                    for ind in range(len(cls)):
+
+                        if ind<seq_len//2:
+                            total_predictions.append(predictions[0])
+                        elif ind>=len(cls)-seq_len//2:
+                            total_predictions.append(predictions[-1])
+                        else:
+                            total_predictions.append(predictions[ind-seq_len//2])
+
+                    total_predictions = np.array(total_predictions)
+
+                    dataframe = pd.DataFrame(total_predictions, columns=behaviors)
+
+                    dataframe.to_csv(outputfile)
+
+                    #print(f'finished inferring {outputfile}')
+
+            
           
     def get_id(self):
  
@@ -848,7 +1002,6 @@ def datasets(dataset_directory):
 
             dsets[dataset] = dconfig
 
-            print(dconfig)
     
     if len(dsets)>0:
         return dsets 
@@ -920,6 +1073,24 @@ def train_model(dataset_directory, name, batch_size, learning_rate, epochs, sequ
     tthread = training_thread(name, config, dataset, int(batch_size), float(learning_rate), int(epochs), int(sequence_length))
 
     tthread.start()
+
+@eel.expose 
+def start_classification(datasets, dataset, whitelist):
+
+    global classification_threads
+
+    config_path = os.path.join(datasets, dataset, 'config.yaml')
+
+    with open(config_path, 'r+') as file:
+        config = yaml.safe_load(file)
+
+    model_path = config['model']
+    if model_path:
+        if os.path.exists(model_path):
+            cthread = classification_thread(model_path, whitelist)
+            cthread.start()
+
+            classification_threads.append(cthread)
 
 
 @eel.expose
@@ -1318,7 +1489,6 @@ def nextVideo(shift):
         if not recovered:
             raise Exception('No valid videos in the dataset.')
         
-    print('loading frame')
         
     nextFrame(1)
 
@@ -1470,6 +1640,10 @@ def kill_streams():
     if tthread:
         tthread.raise_exception() 
         tthread.join()
+
+    for cthread in classification_threads:
+        cthread.raise_exception()
+        cthread.join()
 
 eel.start('frontend/index.html', mode='electron', block=False)
 
