@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>CBASv2/Visualize</title>
+
+        <script type="text/javascript" src="/eel.js"></script>
+
+        <link rel="stylesheet" href="index.css">
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    </head>
+
+    <body class="bg-secondary">
+        <script type="text/javascript" src="/eel.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js" integrity="sha384-0pUGZvbkm6XF6gxjEnlmuGrJXVbNuzT9qBBavbLwCsOGabYfZo0T0to5eqruptLy" crossorigin="anonymous"></script>
+  
+        <nav class="navbar navbar-expand-sm navbar-dark bg-tertiary" style="padding-bottom:50px">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="index.html">CBASv2</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <button class="nav-link" onclick="routeRecord()">Record</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" onclick="routeLabelTrain()">Label/Train</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link text-white" onclick="routeVisualize()">Visualize</button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+
+        <div class="d-flex row" style="max-width: 800px;">
+            <div id="directories" style="width: 250px; padding-left:50px">
+
+            </div>
+            <div id="actogram" style="width: 500px; max-height: max-content;" >
+                <div class="d-flex col" style="justify-content: space-between;">
+                    <h6 class="text-light" style="padding:5px">Framerate: </h6>
+                    <input type="number" class="form-control" id="vs-framerate" aria-describedby="directory" value="10" style="padding:5px; height: 30px; width:60px"  step="1" min="1" max="90" onchange="adjustActogram()">
+                    <h6 class="text-light" style="padding:5px">Bin Size: </h6>
+                    <input type="number" class="form-control" id="vs-binsize" aria-describedby="directory" value="10" style="padding:5px; height: 30px; width:60px"  step="1" min="1" max="720" onchange="adjustActogram()">
+                    <h6 class="text-light" style="padding:5px">Start Time: </h6>
+                    <input type="number" class="form-control" id="vs-start" aria-describedby="directory" value="0" style="padding:5px; height: 30px; width:60px"  step="0.01" min="0" max="24" onchange="adjustActogram()">
+                </div>
+                <img id="actogram-image" src="" alt="" style="display: none;">
+            </div>
+        </div>
+
+        
+        <div class="modal" tabindex="-1" id="errorModal">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Error!</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p id="error-message"></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        
+        <script type="text/javascript">
+          
+            const ipc = window.ipcRenderer
+  
+  
+            let loaded = false
+            let routing = false
+
+            let vis_root_dir = null 
+            let vis_sub_dir = null 
+            let vis_model = null 
+            let vis_behavior = null
+  
+            let dir_children = new Object();
+  
+            function read(attr) {
+                let project_string = window.localStorage.getItem('project')
+                let project = JSON.parse(project_string)
+                return project[attr]
+            }
+  
+            function routeRecord() {
+                routing = true 
+                window.open('./record.html', '_self');
+            }
+  
+            function routeLabelTrain() {
+                routing = true 
+                window.open('./label-train.html', '_self');
+            }
+
+            function routeVisualize() {
+                routing = true 
+                window.open('./visualize.html', '_self');
+            }
+  
+            
+            window.addEventListener("unload", function(e){
+                if(!routing) {
+                    eel.kill_streams();
+                }
+            });
+  
+            window.onbeforeunload = function (){
+                if(!routing) {
+                    eel.kill_streams();
+                }
+            }
+
+            
+            eel.expose(updateActogram);
+            function updateActogram(val) {
+                let elem = document.getElementById('actogram-image');
+                elem.src = "data:image/jpeg;base64, " + val
+
+                elem.style.display="block"
+            }
+
+            function toggleVis(id) {
+                let elem = document.getElementById(id)
+
+                if(elem.style.display=='none') {
+                    elem.style.display = 'block'
+                } else {
+                    elem.style.display = 'none'
+                }
+
+            }
+
+            function setValues(rd, sd, md, beh) {
+                let vis_root_dir = rd;
+                let vis_sub_dir = sd;
+                let vis_model = md;
+                let vis_behavior = beh;
+
+                let fr = document.getElementById('vs-framerate').value
+                let bs = document.getElementById('vs-binsize').value
+                let st = document.getElementById('vs-start').value
+
+                eel.make_actogram(rd, sd, md, beh, fr, bs, st)
+            }
+
+            function adjustActogram() {
+                let fr = document.getElementById('vs-framerate').value
+                let bs = document.getElementById('vs-binsize').value
+                let st = document.getElementById('vs-start').value
+
+                eel.adjust_actogram(fr, bs, st)
+
+            }
+  
+          
+            function initialize() {
+
+                let directories = document.getElementById('directories')
+
+                eel.recording_structure()(function (rt){
+
+                if(rt) {
+
+                    html = ''
+
+                    let root_dirs = Object.keys(rt)
+
+                    for(i=0;i<root_dirs.length;i++) {
+
+                        
+                        let rd = root_dirs[i]
+                        html += `
+                            <div > 
+                                <h3 class='text-light' onclick="toggleVis('rd`+rd+`')" style="cursor:pointer;">`+rd+`
+                                </h3>`
+
+                        html +=`
+                                <div id='rd`+rd+`' style=" display:none;">`
+
+                        let sub_dirs = Object.keys(rt[rd])
+
+                        for(j=0;j<sub_dirs.length;j++) {
+                            let sd = sub_dirs[j]
+                            html += `
+                                <div > 
+                                    <h4 class='text-light' onclick="toggleVis('rd`+rd+`sd`+sd+`')" style="cursor:pointer;padding-left:10px">`+sd+`
+                                    </h4>`
+
+                            html +=`
+                                    <div id='rd`+rd+`sd`+sd+`' style=" display:none;">`
+
+                            let models = Object.keys(rt[rd][sd])
+
+                            for(m=0;m<models.length;m++) {
+                                let model = models[m]
+                                
+                                html += `
+                                    <div > 
+                                        <h5 class='text-light' onclick="toggleVis('rd`+rd+`sd`+sd+`md`+model+`')" style="cursor:pointer;padding-left:20px">`+model+`
+                                        </h5>`
+
+                                html +=`
+                                        <div id='rd`+rd+`sd`+sd+`md`+model+`' style="display:none;padding-left:30px;">`
+
+                                let behaviors = rt[rd][sd][model]
+
+                                for(b=0;b<behaviors.length;b++) {
+
+                                    let behavior = behaviors[b]
+                                    html += `
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="flexRadioDefault" id="md`+model+`-`+behavior+`" onclick="setValues('`+rd+`','`+sd+`','`+model+`','`+behavior+`')">
+                                        <label class="form-check-label text-light h6" for="md`+model+`-`+behavior+`">
+                                            `+behavior+`
+                                        </label>
+                                    </div>`
+
+                                }
+                                
+                                html +=`
+                                </div>
+                                    `
+
+                            }
+                            
+                            html +=`
+                                </div>
+                            </div>
+                                `
+                        }
+
+                        html +=`
+                            </div>
+                        </div>
+                            `
+                    }
+
+                    directories.innerHTML = html
+
+                } else {
+                    document.getElementById('error-message').innerText = 'No recordings yet, try this again when you have recorded videos.'
+                    let errorModal = new bootstrap.Modal(document.getElementById('errorModal'))
+                    errorModal.show()
+                }
+
+                })
+
+            }
+
+            setTimeout(function (){
+                initialize()
+            }, 500)
+  
+              
+          </script>
+  
+      </body>
+  </html>

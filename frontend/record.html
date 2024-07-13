@@ -32,6 +32,9 @@
                         <li class="nav-item">
                             <button class="nav-link" onclick="routeLabelTrain()">Label/Train</button>
                         </li>
+                        <li class="nav-item">
+                            <button class="nav-link" onclick="routeVisualize()">Visualize</button>
+                        </li>
                     </ul>
             
                 </div>
@@ -200,6 +203,11 @@
                 routing = true 
                 window.open('./label-train.html', '_self');
             }
+            function routeVisualize() {
+                routing = true 
+                window.open('./visualize.html', '_self');
+            }
+
 
             function toggleInfer() {
 

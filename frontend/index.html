@@ -37,6 +37,9 @@
                         <li class="nav-item">
                             <a class="nav-link disabled" href="#">Label/Train</a>
                         </li>
+                        <li class="nav-item">
+                            <button class="nav-link disabled" onclick="routeVisualize()">Visualize</button>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -141,6 +144,12 @@
             function routeLabelTrain() {
                 routing = true 
                 window.open('./label-train.html', '_self');
+            }
+            
+
+            function routeVisualize() {
+                routing = true 
+                window.open('./visualize.html', '_self');
             }
 
             createBtn.addEventListener('click', function (event) {

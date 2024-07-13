@@ -9,6 +9,7 @@ import random
 from sys import exit
 import subprocess
 import shutil
+import cairo
 
 import cv2
 
@@ -40,6 +41,234 @@ import ctypes
 import threading
 
 from classifier_head import classifier
+
+
+
+def remove_leading_zeros(num):
+    for i in range(0,len(num)):
+        if num[i]!='0':
+            return int(num[i:])  
+    return 0
+
+class Actogram:
+
+    def __init__(self, directory, model, behavior, framerate, start, binsize, width=500, height=500):
+
+        self.directory = directory
+        self.model = model 
+        self.behavior = behavior 
+        self.framerate = framerate
+        self.start = start 
+
+        self.width = width 
+        self.height = height
+
+        self.binsize = binsize
+
+        self.timeseries()
+
+        self.draw()
+
+    def draw(self):
+
+        bins = []
+
+        for b in range(0, len(self.totalts), self.binsize):
+            bins.append((sum(self.totalts[b:b+self.binsize]), b/self.framerate/3600))
+
+        self.timeseries_data = bins
+
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.width, self.height)
+        ctx = cairo.Context(surface)
+
+        width = self.width
+        height = self.height
+
+        ctx.scale(width, height)
+        
+        self.align_draw(ctx)
+
+        self.file = os.path.join(self.directory, self.model+'-'+self.behavior+'-'+'actogram.png')
+        
+        surface.write_to_png(self.file)
+        
+        frame = cv2.imread(self.file)
+
+        ret, frame = cv2.imencode('.jpg', frame)
+
+        frame = frame.tobytes()
+
+        blob = base64.b64encode(frame)
+        blob = blob.decode("utf-8")
+
+        eel.updateActogram(blob)
+
+
+    def align_draw(self, ctx):
+
+        padding = .01 
+
+        actogram_width = (1 - 2*padding)
+        actogram_height = (1 - 2*padding)
+
+        cx = padding
+        cy = padding
+
+        self.draw_actogram(ctx, cx, cy, actogram_width, actogram_height, padding)
+
+    def draw_actogram(self, ctx, tlx, tly, width, height, padding):
+        
+        ctx.set_line_width(.005)
+
+        ctx.rectangle(tlx - padding/4,tly - padding/4,width + padding/2,height + padding/2)
+        ctx.set_source_rgba(.1, .1, .1, 1)
+        ctx.fill()
+
+        tsdata = self.timeseries_data
+
+        total_days = math.ceil((tsdata[-1][1]+self.start)/24)
+
+        if total_days%2==0:
+            total_days-=1
+        
+        day_height = height/total_days
+        
+        bin_width = 1/48 * self.binsize/36000
+
+        ts = np.array([a[0] for a in tsdata])
+        times = np.array([a[1]+self.start for a in tsdata])
+
+        color = (0,0,0)
+        
+        for d in range(total_days):
+
+            by = tly+(d+1)*day_height
+
+            d1 = d
+
+            valid = np.logical_and(times>(d1*24),times<=((d1+2)*24))
+
+            if d1%2!=0:
+                adj_times = times[valid] + 24
+            else:
+                adj_times = times[valid]
+
+            adj_times = adj_times%48
+
+            series = ts[valid]
+
+            if len(series)==0:
+                continue
+
+            # normalize the series
+            series = np.array(series)
+            series = series/np.max(series)
+
+            series = series*.90
+
+            LD = True
+            # if cycles is not None:
+            #     LD = cycles[i]
+
+            if LD:
+                ctx.set_source_rgb(223/255,223/255,223/255)
+                ctx.rectangle(tlx+0/48*width, by-day_height, 6/48*width, day_height)
+                ctx.fill()
+                ctx.rectangle(tlx+18/48*width, by-day_height, 12/48*width, day_height)
+                ctx.fill()
+                ctx.rectangle(tlx+42/48*width, by-day_height, 6/48*width, day_height)
+                ctx.fill()
+
+                ctx.set_source_rgb(255/255, 239/255, 191/255)
+                ctx.rectangle(tlx+6/48*width, by-day_height, 12/48*width, day_height)
+                ctx.fill()
+                ctx.rectangle(tlx+30/48*width, by-day_height, 12/48*width, day_height)
+                ctx.fill()
+
+            else:
+                ctx.set_source_rgb(223/255,223/255,223/255)
+                ctx.rectangle(tlx+0/48*width, by-day_height, 6/48*width, day_height)
+                ctx.fill()
+                ctx.rectangle(tlx+18/48*width, by-day_height, 12/48*width, day_height)
+                ctx.fill()
+                ctx.rectangle(tlx+42/48*width, by-day_height, 6/48*width, day_height)
+                ctx.fill()
+
+                ctx.set_source_rgb(246/255, 246/255, 246/255)
+                ctx.rectangle(tlx+6/48*width, by-day_height, 12/48*width, day_height)
+                ctx.fill()
+                ctx.rectangle(tlx+30/48*width, by-day_height, 12/48*width, day_height)
+                ctx.fill()
+            
+
+
+            for t in range(len(adj_times)):
+                timepoint = adj_times[t]
+                value = series[t]
+                
+                a_time = timepoint/48
+                
+                ctx.rectangle(tlx+a_time*width,by-value*day_height,bin_width*width,value*day_height)
+                ctx.set_source_rgba(self.color[0]/255, self.color[1]/255, self.color[2]/255, 1)
+                ctx.fill()
+
+        for d in range(total_days):
+
+            by = tly+(d+1)*day_height
+
+            ctx.set_line_width(.002)
+            ctx.set_source_rgb(0, 0, 0)
+            ctx.move_to(tlx, by)
+            ctx.line_to(tlx+48/48*width, by)
+            ctx.stroke()
+
+
+        
+    def timeseries(self):
+
+        cm = Colormap('seaborn:tab20')
+
+        binsize = self.binsize
+        framerate = self.framerate
+
+        behavior = self.behavior
+
+        valid_files = [(os.path.join(self.directory, file), remove_leading_zeros(file.split('_')[2]))  for file in os.listdir(self.directory) if file.endswith('.csv') and '_'+self.model+'_' in file]
+
+        valid_files.sort(key = lambda vf: vf[1])
+        
+        last_num = valid_files[-1][1]
+
+        if len(valid_files)!=last_num+1:
+
+            prev_num = -1
+            for vf, num in valid_files:
+                if num!=prev_num+1:
+                    raise Exception(f'Missing number - {prev_num+1}')
+
+        self.totalts = []
+
+        col_index = -1
+
+        for vf, num in valid_files:
+
+            dataframe = pd.read_csv(vf)
+
+            if col_index==-1:
+                behaviors = dataframe.columns.to_list()[1:]
+
+                col_index = behaviors.index(behavior)
+
+                color = str(cm(tab20_map(col_index))).lstrip('#')
+                self.color = np.flip(np.array([int(color[i:i+2], 16) for i in (0, 2, 4)]))
+
+
+            frames = dataframe[behavior].to_list()
+
+            self.totalts.extend(frames)
+        
+        
+     
 
 
 class Supervised_Set(Dataset):
@@ -362,6 +591,8 @@ gpu_lock = threading.Lock()
 
 classification_threads = []
 
+actogram = None
+
 class inference_thread(threading.Thread):
     def __init__(self, name):
         threading.Thread.__init__(self)
@@ -645,7 +876,6 @@ class training_thread(threading.Thread):
             ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
             print('Exception raise failure')
 
-
 class classification_thread(threading.Thread):
     def __init__(self, model_path, whitelist):
         threading.Thread.__init__(self)
@@ -786,7 +1016,6 @@ class classification_thread(threading.Thread):
         if res > 1:
             ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
             print('Exception raise failure')
-
 
 thread = inference_thread('inference')
 
@@ -987,6 +1216,85 @@ def create_project(parent_directory, project_name):
     print(f'Project creation successful!')
 
     return True, {'project':project, 'cameras':cameras, 'recordings':recordings, 'models':models, 'data_sets':data_sets}
+
+@eel.expose
+def make_actogram(root, sub_dir, model, behavior, framerate, binsize, start):
+
+    global actogram
+
+    framerate = int(framerate)
+    binsize = int(binsize)*framerate*60
+    start = float(start)
+
+    directory = os.path.join(recordings, root, sub_dir)
+
+    actogram = Actogram(directory, model, behavior, framerate, start, binsize, width=500, height=500)
+
+@eel.expose 
+def adjust_actogram(framerate, binsize, start):
+    
+    framerate = int(framerate)
+    binsize = int(binsize)*framerate*60
+    start = float(start)
+
+    global actogram 
+
+    if actogram is not None:
+        actogram.framerate = framerate 
+        actogram.binsize = binsize 
+        actogram.start = start
+
+        actogram.draw()
+
+
+
+@eel.expose 
+def recording_structure():
+
+    global recordings
+
+    if recordings=='':
+        return None 
+    else:
+        structure = {}
+
+        for d in os.listdir(recordings):
+            dpath = os.path.join(recordings, d)
+            if os.path.isdir(dpath):
+                structure[d] = {}
+
+                for subd in os.listdir(dpath):
+                    sdpath = os.path.join(dpath, subd)
+                    if os.path.isdir(sdpath):
+                        structure[d][subd] = {}
+
+                        for f in os.listdir(sdpath):
+                            fpath = os.path.join(sdpath, f)
+                            if f.endswith('.csv'):
+                                try:
+                                    model = f.split('_')[-2]
+
+                                    if model in structure[d][subd].keys():
+                                        continue
+
+                                    dataframe = pd.read_csv(fpath)
+
+                                    behaviors = dataframe.columns.to_list()
+
+                                    structure[d][subd][model] = behaviors[1:]
+                                except:
+                                    continue
+                            
+                            else:
+                                continue
+                    
+                    else:
+                        continue
+
+            else:
+                continue
+        
+        return structure
 
 @eel.expose 
 def datasets(dataset_directory):
