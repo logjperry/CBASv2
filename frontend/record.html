@@ -163,14 +163,14 @@
             </div>
         </div>
 
-        <div class="fab-container-inference">
+        <!-- <div class="fab-container-inference">
             <div class="fab shadow">
               <div class="fab-content" onclick="toggleInfer()">
                 <i class="bi bi-stars" style="color:white; font-size:35px; visibility: visible;" id="on"></i>
                 <i class="bi bi-pause" style="color:white; font-size:0px; visibility: hidden;" id='off'></i>
               </div>
             </div>
-        </div>
+        </div> -->
 
         <div id="cover-spin"></div>
 
@@ -209,24 +209,24 @@
             }
 
 
-            function toggleInfer() {
+            // function toggleInfer() {
 
-                let val = document.getElementById('on').style.visibility == 'visible'
+            //     let val = document.getElementById('on').style.visibility == 'visible'
 
-                if(val) {
-                    document.getElementById('on').style.visibility = 'hidden'
-                    document.getElementById('on').style.fontSize = '0px'
-                    document.getElementById('off').style.visibility = 'visible'
-                    document.getElementById('off').style.fontSize = '35px'
-                } else {
-                    document.getElementById('on').style.visibility = 'visible'
-                    document.getElementById('on').style.fontSize = '35px'
-                    document.getElementById('off').style.visibility = 'hidden'
-                    document.getElementById('off').style.fontSize = '0px'
-                }
+            //     if(val) {
+            //         document.getElementById('on').style.visibility = 'hidden'
+            //         document.getElementById('on').style.fontSize = '0px'
+            //         document.getElementById('off').style.visibility = 'visible'
+            //         document.getElementById('off').style.fontSize = '35px'
+            //     } else {
+            //         document.getElementById('on').style.visibility = 'visible'
+            //         document.getElementById('on').style.fontSize = '35px'
+            //         document.getElementById('off').style.visibility = 'hidden'
+            //         document.getElementById('off').style.fontSize = '0px'
+            //     }
 
-                eel.switch_infer()
-            }
+            //     eel.switch_infer()
+            // }
 
             function load_initial() {
                 eel.camera_names(read('cameras'))().then( function(data) {

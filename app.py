@@ -583,7 +583,6 @@ label_index = -1
 label = -1 
 start = -1
 
-toggle_infer = False
 
 instance_stack = None
 
@@ -601,14 +600,13 @@ class inference_thread(threading.Thread):
     def run(self):
         global stop_threads
         global progresses
-        global toggle_infer
         global gpu_lock
 
 
         while True:
 
             progresses = []
-            if recordings!='' and toggle_infer:
+            if recordings!='':
                 videos = []
                 sub_dirs = [os.path.join(recordings, d) for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
                 for sd in sub_dirs:
@@ -727,7 +725,6 @@ class training_thread(threading.Thread):
         return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
              
     def run(self):
-        global toggle_infer
         global gpu_lock
 
         with gpu_lock:
@@ -884,7 +881,6 @@ class classification_thread(threading.Thread):
         self.whitelist = whitelist
              
     def run(self):
-        global toggle_infer
         global gpu_lock
 
         while True:
@@ -1138,10 +1134,6 @@ def fill_colors(frame):
 eel.init('frontend')
 eel.browsers.set_path('electron', 'node_modules/electron/dist/electron')
 
-@eel.expose 
-def switch_infer():
-    global toggle_infer
-    toggle_infer = not toggle_infer
 
 @eel.expose 
 def get_progress_update():
