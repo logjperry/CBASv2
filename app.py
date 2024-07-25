@@ -20,7 +20,7 @@ import h5py
 
 import torch
 from torch.cuda.amp import autocast, GradScaler
-from torch import nn 
+from torch import nn
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from transformers import AutoImageProcessor, AutoModel
@@ -47,7 +47,7 @@ from classifier_head import classifier
 def remove_leading_zeros(num):
     for i in range(0,len(num)):
         if num[i]!='0':
-            return int(num[i:])  
+            return int(num[i:])
     return 0
 
 class Actogram:
@@ -55,12 +55,12 @@ class Actogram:
     def __init__(self, directory, model, behavior, framerate, start, binsize, width=500, height=500):
 
         self.directory = directory
-        self.model = model 
-        self.behavior = behavior 
+        self.model = model
+        self.behavior = behavior
         self.framerate = framerate
-        self.start = start 
+        self.start = start
 
-        self.width = width 
+        self.width = width
         self.height = height
 
         self.binsize = binsize
@@ -85,13 +85,13 @@ class Actogram:
         height = self.height
 
         ctx.scale(width, height)
-        
+
         self.align_draw(ctx)
 
         self.file = os.path.join(self.directory, self.model+'-'+self.behavior+'-'+'actogram.png')
-        
+
         surface.write_to_png(self.file)
-        
+
         frame = cv2.imread(self.file)
 
         ret, frame = cv2.imencode('.jpg', frame)
@@ -106,7 +106,7 @@ class Actogram:
 
     def align_draw(self, ctx):
 
-        padding = .01 
+        padding = .01
 
         actogram_width = (1 - 2*padding)
         actogram_height = (1 - 2*padding)
@@ -117,7 +117,7 @@ class Actogram:
         self.draw_actogram(ctx, cx, cy, actogram_width, actogram_height, padding)
 
     def draw_actogram(self, ctx, tlx, tly, width, height, padding):
-        
+
         ctx.set_line_width(.005)
 
         ctx.rectangle(tlx - padding/4,tly - padding/4,width + padding/2,height + padding/2)
@@ -130,16 +130,16 @@ class Actogram:
 
         if total_days%2==0:
             total_days-=1
-        
+
         day_height = height/total_days
-        
+
         bin_width = 1/48 * self.binsize/36000
 
         ts = np.array([a[0] for a in tsdata])
         times = np.array([a[1]+self.start for a in tsdata])
 
         color = (0,0,0)
-        
+
         for d in range(total_days):
 
             by = tly+(d+1)*day_height
@@ -199,15 +199,15 @@ class Actogram:
                 ctx.fill()
                 ctx.rectangle(tlx+30/48*width, by-day_height, 12/48*width, day_height)
                 ctx.fill()
-            
+
 
 
             for t in range(len(adj_times)):
                 timepoint = adj_times[t]
                 value = series[t]
-                
+
                 a_time = timepoint/48
-                
+
                 ctx.rectangle(tlx+a_time*width,by-value*day_height,bin_width*width,value*day_height)
                 ctx.set_source_rgba(self.color[0]/255, self.color[1]/255, self.color[2]/255, 1)
                 ctx.fill()
@@ -223,7 +223,7 @@ class Actogram:
             ctx.stroke()
 
 
-        
+
     def timeseries(self):
 
         cm = Colormap('seaborn:tab20')
@@ -236,7 +236,7 @@ class Actogram:
         valid_files = [(os.path.join(self.directory, file), remove_leading_zeros(file.split('_')[1]))  for file in os.listdir(self.directory) if file.endswith('.csv') and '_'+self.model+'_' in file]
 
         valid_files.sort(key = lambda vf: vf[1])
-        
+
         last_num = valid_files[-1][1]
 
         if len(valid_files)!=last_num+1:
@@ -272,9 +272,9 @@ class Actogram:
                 frames = onehot
 
             self.totalts.extend(frames)
-        
-        
-     
+
+
+
 
 
 class Supervised_Set(Dataset):
@@ -290,7 +290,7 @@ class Supervised_Set(Dataset):
 
         self.seq_len = seq_len
         self.hsl = seq_len//2
-        
+
         self.behaviors = []
 
         self.training_sequences = []
@@ -313,7 +313,7 @@ class Supervised_Set(Dataset):
                 for b in behaviors:
                     if b not in self.behaviors:
                         self.behaviors.append(b)
-            
+
             else:
                 for b in behaviors:
                     if b not in self.behaviors:
@@ -333,13 +333,13 @@ class Supervised_Set(Dataset):
 
             for b in behaviors:
                 for i in instances[b]:
-                    
+
                     vid_name = os.path.split(i['video'])[1]
                     group = vid_name.split('_')[1]
 
                     if group not in groups:
                         groups[group] = {b:[] for b in behaviors}
-                    
+
                     groups[group][b].append(i)
                     total_insts[b] += 1
 
@@ -348,12 +348,12 @@ class Supervised_Set(Dataset):
             random.shuffle(keys)
 
             binsts = {b:[] for b in behaviors}
-            
+
             for key in keys:
                 insts = groups[key]
                 for b in behaviors:
                     binsts[b].extend(insts[b])
-            
+
             for b in behaviors:
                 splt = int((1-split)*len(binsts[b]))
                 training_insts.extend(binsts[b][:splt])
@@ -367,7 +367,7 @@ class Supervised_Set(Dataset):
 
             ltrain = len(training_insts)
             ltest = len(testing_insts)
-            
+
             if set_type == 'train':
 
                 for i in range(ltrain):
@@ -382,7 +382,7 @@ class Supervised_Set(Dataset):
 
                     cls_path = video_path.replace('.mp4', '_cls.h5')
 
-                    
+
                     with h5py.File(cls_path, 'r') as file:
                         cls = file['cls'][:]
 
@@ -405,7 +405,7 @@ class Supervised_Set(Dataset):
 
                         clss = torch.from_numpy(clss - video_mean).half()
 
-                        
+
                         if clss.shape[0] != self.seq_len:
                             continue
 
@@ -428,9 +428,9 @@ class Supervised_Set(Dataset):
 
             elif set_type == 'test':
 
-                
+
                 for i in range(ltest):
-                    
+
                     print(f'Generating test instance: {i}/{ltest}')
 
                     inst = testing_insts[i]
@@ -443,7 +443,7 @@ class Supervised_Set(Dataset):
 
                     video_mean = None
 
-                    
+
                     with h5py.File(cls_path, 'r') as file:
                         cls = file['cls'][:]
 
@@ -480,12 +480,12 @@ class Supervised_Set(Dataset):
                 random.shuffle(all)
 
                 seqs, labels = map(list, zip(*all))
-                
+
                 self.testing_sequences.extend(seqs)
                 self.testing_labels.extend(labels)
 
         if set_type == 'train':
-        
+
             all = list(zip(self.training_sequences, self.training_labels))
             random.shuffle(all)
             self.training_sequences, self.training_labels = map(list, zip(*all))
@@ -495,9 +495,9 @@ class Supervised_Set(Dataset):
                 self.dcls.append(self.training_sequences[i])
 
             self.lbls.extend(self.training_labels)
-        
+
         elif set_type == 'test':
-                
+
             all = list(zip(self.testing_sequences, self.testing_labels))
             random.shuffle(all)
             self.testing_sequences, self.testing_labels = map(list, zip(*all))
@@ -526,9 +526,9 @@ class Supervised_Set(Dataset):
 
         dcls = self.organized_sequences[self.behaviors[b]][idx%len(self.organized_sequences[self.behaviors[b]])]
         lbl = torch.tensor(b).long()
-            
+
         return dcls, lbl
-    
+
 def collate_fn(batch):
 
     dcls = [item[0] for item in batch]
@@ -548,7 +548,7 @@ class encoder(nn.Module):
 
         self.model = AutoModel.from_pretrained('facebook/dinov2-base').to(device)
         self.model.eval()
-        
+
         for param in self.model.parameters():
             param.requires_grad = False
 
@@ -568,7 +568,7 @@ class encoder(nn.Module):
         cls = out.last_hidden_state[:, 0, :].reshape(B, S, 768)
 
         return cls
-    
+
 
 active_streams = {}
 
@@ -586,7 +586,7 @@ label_capture = None
 label_videos = []
 label_vid_index = -1
 label_index = -1
-label = -1 
+label = -1
 start = -1
 
 instance_stack = None
@@ -601,7 +601,7 @@ class inference_thread(threading.Thread):
     def __init__(self, name):
         threading.Thread.__init__(self)
         self.name = name
-             
+
     def run(self):
         global stop_threads
         global progresses
@@ -628,7 +628,7 @@ class inference_thread(threading.Thread):
                         continue
 
                     valid_videos.append(v)
-                
+
                 videos = valid_videos
 
                 if len(videos)==0:
@@ -642,7 +642,7 @@ class inference_thread(threading.Thread):
 
                 for iv, v in enumerate(videos):
                     with gpu_lock:
-                        
+
                         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                         enc = encoder(device).to(device)
 
@@ -656,7 +656,7 @@ class inference_thread(threading.Thread):
                                 continue
 
                             vr = VideoReader(v, ctx=cpu(0))
-                            
+
                             frames = vr.get_batch(range(0, len(vr), 1)).asnumpy()
 
                             frames = torch.from_numpy(frames[:, :, :, 1]/255).half()
@@ -682,7 +682,7 @@ class inference_thread(threading.Thread):
                                 file.create_dataset('cls', data=torch.stack(clss).numpy())
 
                             progresses[iv] = m
-                            
+
                         except Exception as e:
                             progresses[iv] = -1
                             print('Error processing video:', v)
@@ -693,16 +693,16 @@ class inference_thread(threading.Thread):
                 time.sleep(1)
             else:
                 time.sleep(1)
-          
+
     def get_id(self):
- 
+
         # returns id of the respective thread
         if hasattr(self, '_thread_id'):
             return self._thread_id
         for id, thread in threading._active.items():
             if thread is self:
                 return id
-  
+
     def raise_exception(self):
         thread_id = self.get_id()
         res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
@@ -721,14 +721,14 @@ class training_thread(threading.Thread):
 
         self.batch_size = batch_size
         self.learning_rate = learning_rate
-        self.epochs = epochs 
+        self.epochs = epochs
         self.sequence_length = sequence_length
-        
+
     def off_diagonal(self, x):
         n, m = x.shape
         assert n == m
         return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
-             
+
     def run(self):
         global gpu_lock
 
@@ -776,7 +776,7 @@ class training_thread(threading.Thread):
                         param_group["lr"] = (epochs-e)/epochs * 0.0005 + (e/epochs) * 0.00001
 
                     for i, (d, l) in enumerate(train_loader):
-                        
+
                         d = d.to(device).float()
                         l = l.to(device)
 
@@ -789,7 +789,7 @@ class training_thread(threading.Thread):
                         logits = lstm_logits + linear_logits
 
                         inv_loss = criterion(logits, l)
-                        
+
                         rawm = (rawm - rawm.mean(dim=0))
 
                         covm = (rawm @ rawm.T)/rawm.shape[0]
@@ -806,7 +806,7 @@ class training_thread(threading.Thread):
                     predictions = []
 
                     for i, (d, l) in enumerate(test_loader):
-                            
+
                         d = d.to(device).float()
                         l = l.to(device)
 
@@ -840,10 +840,10 @@ class training_thread(threading.Thread):
                     update_metrics(self.config, b, 'Precision', round(best_report[b]['precision'], 2))
                     update_metrics(self.config, b, 'Recall', round(best_report[b]['recall'], 2))
                     update_metrics(self.config, b, 'F1 Score', round(best_report[b]['f1-score'], 2))
-                
+
                 with open(self.config, 'r+') as file:
                     config = yaml.safe_load(file)
-                
+
                 config['model'] = model_path
 
                 with open(self.config, 'w+') as file:
@@ -859,17 +859,17 @@ class training_thread(threading.Thread):
                 with open(config_path, 'w+') as file:
                     yaml.dump(config, file, allow_unicode=True)
 
-        
-          
+
+
     def get_id(self):
- 
+
         # returns id of the respective thread
         if hasattr(self, '_thread_id'):
             return self._thread_id
         for id, thread in threading._active.items():
             if thread is self:
                 return id
-  
+
     def raise_exception(self):
         thread_id = self.get_id()
         res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
@@ -882,15 +882,15 @@ class classification_thread(threading.Thread):
     def __init__(self, model_path, whitelist):
         threading.Thread.__init__(self)
 
-        self.model_path = model_path 
+        self.model_path = model_path
         self.whitelist = whitelist
-             
+
     def run(self):
         global gpu_lock
 
         while True:
 
-            
+
 
             time.sleep(1)
 
@@ -899,7 +899,7 @@ class classification_thread(threading.Thread):
                 dataset_name = os.path.split(os.path.split(self.model_path)[0])[1]
 
                 config_path = os.path.join(os.path.split(self.model_path)[0], 'config.yaml')
-                
+
                 with open(config_path, 'r+') as file:
                     config = yaml.safe_load(file)
 
@@ -907,7 +907,7 @@ class classification_thread(threading.Thread):
                 behaviors = config['behaviors']
 
                 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                
+
                 model = torch.load(self.model_path)
 
                 model.eval()
@@ -923,7 +923,7 @@ class classification_thread(threading.Thread):
 
 
                     if len(sub_dirs)==0:
-                        continue 
+                        continue
                     else:
 
                         for sd in sub_dirs:
@@ -940,12 +940,12 @@ class classification_thread(threading.Thread):
                         if wl in v:
                             valid_videos.append(v)
 
-                        
+
 
                 for clsfile in valid_videos:
 
                     outputfile = clsfile.replace('_cls.h5', '_'+dataset_name+'_outputs.csv')
-                        
+
                     with h5py.File(clsfile, 'r') as file:
                         cls = np.array(file['cls'][:])
 
@@ -977,7 +977,7 @@ class classification_thread(threading.Thread):
                                 probs = torch.softmax(logits, dim=1)
 
                                 predictions.extend(probs.detach().cpu().numpy())
-                            
+
                             batch = []
 
                     total_predictions = []
@@ -998,17 +998,17 @@ class classification_thread(threading.Thread):
                     dataframe.to_csv(outputfile)
 
 
-            
-          
+
+
     def get_id(self):
- 
+
         # returns id of the respective thread
         if hasattr(self, '_thread_id'):
             return self._thread_id
         for id, thread in threading._active.items():
             if thread is self:
                 return id
-  
+
     def raise_exception(self):
         thread_id = self.get_id()
         res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
@@ -1029,7 +1029,7 @@ def tab20_map(val):
         return (val - 10)*2 + 1
 
 def add_instance():
-    global label_videos 
+    global label_videos
     global label_vid_index
     global label_capture
     global label
@@ -1043,7 +1043,7 @@ def add_instance():
 
     stemp = min(start, label_index)
     eInd = max(start, label_index)
-    sInd = stemp 
+    sInd = stemp
 
     # check for collisions
     labels = label_dict['labels']
@@ -1060,7 +1060,7 @@ def add_instance():
                 elif eInd < l['end'] and eInd > l['start']:
                     label = -1
                     raise Exception('Overlapping behavior region! Behavior not recorded.')
-          
+
     behavior = label_dict['behaviors'][label]
 
     instance = {
@@ -1084,7 +1084,7 @@ def add_instance():
 
 
 def fill_colors(frame):
-    global label_videos 
+    global label_videos
     global label_vid_index
     global label_capture
     global label
@@ -1110,7 +1110,7 @@ def fill_colors(frame):
 
         for l in sub_labels:
             if l['video'] != cur_video:
-                continue 
+                continue
             sInd = l['start']
             eInd = l['end']
 
@@ -1122,11 +1122,11 @@ def fill_colors(frame):
     if label!=-1:
         color = str(col_map(tab20_map(label))).lstrip('#')
         color = np.flip(np.array([int(color[i:i+2], 16) for i in (0, 2, 4)]))
-        
+
         stemp = min(start, label_index)
         eInd = max(start, label_index)
 
-        sInd = stemp 
+        sInd = stemp
 
         marker_posS = int(frame.shape[1] * sInd/amount_of_frames)
         marker_posE = int(frame.shape[1] * eInd/amount_of_frames)
@@ -1134,12 +1134,12 @@ def fill_colors(frame):
         frame[-49:, marker_posS:marker_posE+1,] = color
 
     return frame
-            
+
 eel.init('frontend')
 eel.browsers.set_path('electron', 'node_modules/electron/dist/electron')
 
 
-@eel.expose 
+@eel.expose
 def get_progress_update():
     if len(progresses)==0:
         eel.inferLoadBar(False)()
@@ -1154,14 +1154,14 @@ def make_recording_dir(root, sub_dir, camera_name):
 
     if not os.path.exists(os.path.join(root, sub_dir)):
         os.mkdir(os.path.join(root, sub_dir))
-    
-    cam_session = camera_name + '-' + datetime.now().strftime('%I%M%S-%p')    
-    
+
+    cam_session = camera_name + '-' + datetime.now().strftime('%I%M%S-%p')
+
     if not os.path.exists(os.path.join(root, sub_dir, cam_session)):
         os.mkdir(os.path.join(root, sub_dir, cam_session))
 
         return os.path.join(root, sub_dir, cam_session)
-    
+
     return False
 
 @eel.expose
@@ -1185,7 +1185,7 @@ def project_exists(project_directory):
 
 @eel.expose
 def create_project(parent_directory, project_name):
-    
+
     global recordings
 
     # main project directory
@@ -1228,31 +1228,31 @@ def make_actogram(root, sub_dir, model, behavior, framerate, binsize, start):
 
     actogram = Actogram(directory, model, behavior, framerate, start, binsize, width=500, height=500)
 
-@eel.expose 
+@eel.expose
 def adjust_actogram(framerate, binsize, start):
-    
+
     framerate = int(framerate)
     binsize = int(binsize)*framerate*60
     start = float(start)
 
-    global actogram 
+    global actogram
 
     if actogram is not None:
-        actogram.framerate = framerate 
-        actogram.binsize = binsize 
+        actogram.framerate = framerate
+        actogram.binsize = binsize
         actogram.start = start
 
         actogram.draw()
 
 
 
-@eel.expose 
+@eel.expose
 def recording_structure():
 
     global recordings
 
     if recordings=='':
-        return None 
+        return None
     else:
         structure = {}
 
@@ -1282,19 +1282,19 @@ def recording_structure():
                                     structure[d][subd][model] = behaviors[1:]
                                 except:
                                     continue
-                            
+
                             else:
                                 continue
-                    
+
                     else:
                         continue
 
             else:
                 continue
-        
+
         return structure
 
-@eel.expose 
+@eel.expose
 def datasets(dataset_directory):
     dsets = {}
 
@@ -1308,13 +1308,13 @@ def datasets(dataset_directory):
 
             dsets[dataset] = dconfig
 
-    
+
     if len(dsets)>0:
-        return dsets 
+        return dsets
     else:
         return False
 
-@eel.expose 
+@eel.expose
 def create_dataset(dataset_directory, name, behaviors, recordings):
 
     global label_dict_path
@@ -1323,17 +1323,17 @@ def create_dataset(dataset_directory, name, behaviors, recordings):
     rt = get_record_tree()
 
     if not rt:
-        return False 
-    
+        return False
+
     whitelist = []
 
     for r in recordings:
         whitelist.append(r+'\\')
-    
+
     directory = os.path.join(dataset_directory, name)
 
     if os.path.exists(directory):
-        return False 
+        return False
     else:
         os.mkdir(directory)
 
@@ -1367,11 +1367,11 @@ def create_dataset(dataset_directory, name, behaviors, recordings):
 
         return True
 
-@eel.expose 
-def train_model(dataset_directory, name, batch_size, learning_rate, epochs, sequence_length): 
+@eel.expose
+def train_model(dataset_directory, name, batch_size, learning_rate, epochs, sequence_length):
     #name, config, dataset, batch_size, learning_rate, epochs, sequence_length
 
-    global tthread 
+    global tthread
 
     config = os.path.join(dataset_directory, name, 'config.yaml')
     dataset = os.path.join(dataset_directory, name, 'labels.yaml')
@@ -1380,7 +1380,7 @@ def train_model(dataset_directory, name, batch_size, learning_rate, epochs, sequ
 
     tthread.start()
 
-@eel.expose 
+@eel.expose
 def start_classification(datasets, dataset, whitelist):
 
     global classification_threads
@@ -1414,7 +1414,7 @@ def ping_cameras(camera_directory):
             names.append(cconfig['name'])
 
             print(f'Loading camera: {cconfig["name"]} at {cconfig["rtsp_url"]}...')
-            
+
             rtsp_url = cconfig['rtsp_url']
 
             frame_location = os.path.join(camera_directory, camera, 'frame.jpg')
@@ -1423,7 +1423,7 @@ def ping_cameras(camera_directory):
                 os.remove(frame_location)
 
             command = f"ffmpeg -loglevel panic -rtsp_transport tcp -i {rtsp_url} -vf \"select=eq(n\,34)\" -vframes 1 -y {frame_location}"
-            
+
             subprocess.Popen(command, shell=True)
 
             print(f'Finished loading camera: {cconfig["name"]} at {cconfig["rtsp_url"]}...')
@@ -1448,9 +1448,9 @@ def update_camera_frames(camera_directory):
 
                 blob = base64.b64encode(frame)
                 blob = blob.decode("utf-8")
-                
+
                 eel.updateImageSrc(camera, blob)()
-    
+
 @eel.expose
 def camera_names(camera_directory):
 
@@ -1465,7 +1465,7 @@ def camera_names(camera_directory):
 
 @eel.expose
 def create_camera(camera_directory, name, rtsp_url, framerate=10, resolution=256, crop_left_x=0, crop_top_y=0, crop_width=1, crop_height=1):
-    
+
     # set up a folder for the camera
     camera = os.path.join(camera_directory, name)
 
@@ -1532,7 +1532,7 @@ def update_camera(camera_directory, name, rtsp_url, framerate=10, resolution=256
 
 @eel.expose
 def test_camera(camera_directory, name, rtsp_url):
-    
+
     # set up a folder for the camera
     camera = os.path.join(camera_directory, name)
 
@@ -1566,7 +1566,7 @@ def get_cam_settings(camera_directory, name):
             cconfig = yaml.safe_load(file)
 
         return cconfig
-    
+
     return False
 
 @eel.expose
@@ -1594,7 +1594,7 @@ def start_camera_stream(camera_directory, name, destination, segment_time, durat
 
     with open(config, 'r') as file:
         cconfig = yaml.safe_load(file)
-    
+
     rtsp_url = cconfig['rtsp_url']
     framerate = cconfig['framerate']
     scale = cconfig['resolution']
@@ -1611,10 +1611,10 @@ def start_camera_stream(camera_directory, name, destination, segment_time, durat
     destination = os.path.join(destination, f'{name}_%05d.mp4')
 
     command = [
-        'ffmpeg', '-loglevel', 'panic', '-rtsp_transport', 'tcp', '-i', str(rtsp_url), 
-        '-r', str(framerate), 
-        '-filter_complex', f"[0:v]crop=(iw*{cw}):(ih*{ch}):(iw*{cx}):(ih*{cy}),scale={scale}:{scale}[cropped]", 
-        '-map', '[cropped]', '-f', 'segment', '-segment_time', str(segment_time), 
+        'ffmpeg', '-loglevel', 'panic', '-rtsp_transport', 'tcp', '-i', str(rtsp_url),
+        '-r', str(framerate),
+        '-filter_complex', f"[0:v]crop=(iw*{cw}):(ih*{ch}):(iw*{cx}):(ih*{cy}),scale={scale}:{scale}[cropped]",
+        '-map', '[cropped]', '-f', 'segment', '-segment_time', str(segment_time),
         '-reset_timestamps', '1',
         '-hls_flags', 'temp_file', '-y', destination
     ]
@@ -1625,19 +1625,19 @@ def start_camera_stream(camera_directory, name, destination, segment_time, durat
 
     return True
 
-@eel.expose 
+@eel.expose
 def get_record_tree():
     global recordings
 
     rt = {}
 
     if recordings=='':
-        return False 
+        return False
     else:
         sub_dirs = [d for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
 
         if len(sub_dirs)==0:
-            return False 
+            return False
         else:
             rt = {sd:[] for sd in sub_dirs}
 
@@ -1649,27 +1649,27 @@ def get_record_tree():
 
     return rt
 
-@eel.expose 
+@eel.expose
 def pop_instance():
 
-    global instance_stack 
+    global instance_stack
     global label_dict
 
     last_inst = instance_stack[-1]
 
-    beh = None 
+    beh = None
     ind = None
 
     for b in label_dict['behaviors']:
         for i,inst in enumerate(label_dict['labels'][b]):
             if inst['video']==last_inst['video'] and inst['start']==last_inst['start'] and inst['end']==last_inst['end']:
-                beh = b 
-                ind = i 
+                beh = b
+                ind = i
     if beh==None or ind==None:
-        return 
+        return
     else:
         del label_dict['labels'][beh][ind]
-        
+
     # save the label dictionary
     with open(label_dict_path, 'w+') as file:
         yaml.dump(label_dict, file, allow_unicode=True)
@@ -1679,13 +1679,13 @@ def pop_instance():
     nextFrame(0)
 
 
-@eel.expose 
+@eel.expose
 def label_frame(value):
-    
+
     global label_dict
 
-    global label 
-    global label_index 
+    global label
+    global label_index
     global start
 
     behaviors = label_dict['behaviors']
@@ -1709,7 +1709,7 @@ def nextFrame(shift):
     global label_videos
     global label_vid_index
     global label_index
-    global label 
+    global label
     global start
 
     if shift<=0:
@@ -1719,7 +1719,7 @@ def nextFrame(shift):
 
         amount_of_frames = label_capture.get(cv2.CAP_PROP_FRAME_COUNT)
 
-        label_index+=shift 
+        label_index+=shift
         label_index%=amount_of_frames
 
 
@@ -1734,7 +1734,7 @@ def nextFrame(shift):
 
             temp = np.zeros((frame.shape[0]+50, frame.shape[1], frame.shape[2]))
 
-            temp[:-50,:,:] = frame 
+            temp[:-50,:,:] = frame
 
             temp[-50,:,:] = 0
 
@@ -1754,21 +1754,21 @@ def nextFrame(shift):
 
 
             ret, frame = cv2.imencode('.jpg', temp)
-            
+
             frame = frame.tobytes()
 
             blob = base64.b64encode(frame)
             blob = blob.decode("utf-8")
 
             eel.updateLabelImageSrc(blob)()
-        
+
 @eel.expose
 def nextVideo(shift):
     global label_capture
     global label_videos
     global label_vid_index
     global label_index
-    global label 
+    global label
     global start
 
     start = -1
@@ -1789,16 +1789,16 @@ def nextVideo(shift):
             label_capture = cv2.VideoCapture(video)
 
             if label_capture.isOpened():
-                recovered = True 
-                break 
+                recovered = True
+                break
 
         if not recovered:
             raise Exception('No valid videos in the dataset.')
-        
-        
+
+
     nextFrame(1)
 
-@eel.expose 
+@eel.expose
 def start_labeling(root, dataset_name):
 
     global label_dict_path
@@ -1811,7 +1811,7 @@ def start_labeling(root, dataset_name):
     global label_videos
     global label_vid_index
     global label_index
-    global label 
+    global label
     global start
 
     global instance_stack
@@ -1820,7 +1820,7 @@ def start_labeling(root, dataset_name):
     label_videos = []
     label_vid_index = -1
     label_index = -1
-    label = -1 
+    label = -1
     start = -1
     instance_stack = []
 
@@ -1838,7 +1838,7 @@ def start_labeling(root, dataset_name):
 
     if not os.path.exists(dataset_config):
         return False
-    
+
     with open(label_dict_path, 'r') as file:
         label_dict = yaml.safe_load(file)
 
@@ -1850,12 +1850,12 @@ def start_labeling(root, dataset_name):
     all_videos = []
 
     if recordings=='':
-        return False 
+        return False
     else:
         sub_dirs = [os.path.join(recordings, d) for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
 
         if len(sub_dirs)==0:
-            return False 
+            return False
         else:
 
             for sd in sub_dirs:
@@ -1876,13 +1876,13 @@ def start_labeling(root, dataset_name):
         return False
     else:
         label_videos = valid_videos
-        
+
     nextVideo(1)
 
 
     return label_dict['behaviors'], [str(col_map(tab20_map(i))) for i in range(len(label_dict['behaviors']))]
 
-@eel.expose 
+@eel.expose
 def update_counts():
     global label_dict_path
     global label_dict
@@ -1898,13 +1898,13 @@ def update_counts():
         eel.updateCount(b, len(insts))()
 
 
-@eel.expose 
+@eel.expose
 def update_metrics(config_path, behavior, group, value):
 
     with open(config_path, 'r') as file:
         config = yaml.safe_load(file)
 
-    config['metrics'][behavior][group] = value 
+    config['metrics'][behavior][group] = value
 
     with open(config_path, 'w+') as file:
         yaml.dump(config, file, allow_unicode=True)
@@ -1925,8 +1925,8 @@ def stop_camera_stream(camera_name):
         active_streams[camera_name].communicate(input=b'q')
         active_streams.pop(camera_name)
 
-        return True 
-    
+        return True
+
     return False
 
 @eel.expose
@@ -1934,17 +1934,17 @@ def kill_streams():
     global active_streams
     global stop_threads
     global thread
-    global tthread 
+    global tthread
 
     for stream in active_streams.keys():
         active_streams[stream].communicate(input=b'q')
-    
+
     stop_threads = True
     thread.raise_exception()
     thread.join()
 
     if tthread:
-        tthread.raise_exception() 
+        tthread.raise_exception()
         tthread.join()
 
     for cthread in classification_threads:
@@ -1956,5 +1956,4 @@ eel.start('frontend/index.html', mode='electron', block=False)
 thread.start()
 
 while True:
-    eel.sleep(1.0) 
-
+    eel.sleep(1.0)
