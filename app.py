@@ -233,7 +233,7 @@ class Actogram:
 
         behavior = self.behavior
 
-        valid_files = [(os.path.join(self.directory, file), remove_leading_zeros(file.split('_')[2]))  for file in os.listdir(self.directory) if file.endswith('.csv') and '_'+self.model+'_' in file]
+        valid_files = [(os.path.join(self.directory, file), remove_leading_zeros(file.split('_')[1]))  for file in os.listdir(self.directory) if file.endswith('.csv') and '_'+self.model+'_' in file]
 
         valid_files.sort(key = lambda vf: vf[1])
         
@@ -250,6 +250,8 @@ class Actogram:
 
         col_index = -1
 
+        continuous = False
+
         for vf, num in valid_files:
 
             dataframe = pd.read_csv(vf)
@@ -262,8 +264,12 @@ class Actogram:
                 color = str(cm(tab20_map(col_index))).lstrip('#')
                 self.color = np.flip(np.array([int(color[i:i+2], 16) for i in (0, 2, 4)]))
 
+            onehot = np.argmax(dataframe[behaviors].to_numpy(), axis=1) == col_index
 
-            frames = dataframe[behavior].to_list()
+            if continuous:
+                frames = dataframe[behavior].to_list()
+            else:
+                frames = onehot
 
             self.totalts.extend(frames)
         
@@ -583,8 +589,6 @@ label_index = -1
 label = -1 
 start = -1
 
-toggle_infer = False
-
 instance_stack = None
 
 gpu_lock = threading.Lock()
@@ -601,14 +605,13 @@ class inference_thread(threading.Thread):
     def run(self):
         global stop_threads
         global progresses
-        global toggle_infer
         global gpu_lock
 
 
         while True:
 
             progresses = []
-            if recordings!='' and toggle_infer:
+            if recordings!='':
                 videos = []
                 sub_dirs = [os.path.join(recordings, d) for d in os.listdir(recordings) if os.path.isdir(os.path.join(recordings, d))]
                 for sd in sub_dirs:
@@ -630,7 +633,7 @@ class inference_thread(threading.Thread):
 
                 if len(videos)==0:
 
-                    time.sleep(5)
+                    time.sleep(1)
                     continue
 
                 progresses = [0 for v in videos]
@@ -727,7 +730,6 @@ class training_thread(threading.Thread):
         return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
              
     def run(self):
-        global toggle_infer
         global gpu_lock
 
         with gpu_lock:
@@ -884,12 +886,13 @@ class classification_thread(threading.Thread):
         self.whitelist = whitelist
              
     def run(self):
-        global toggle_infer
         global gpu_lock
 
         while True:
 
-            time.sleep(5)
+            
+
+            time.sleep(1)
 
             with gpu_lock:
 
@@ -937,13 +940,11 @@ class classification_thread(threading.Thread):
                         if wl in v:
                             valid_videos.append(v)
 
+                        
+
                 for clsfile in valid_videos:
 
                     outputfile = clsfile.replace('_cls.h5', '_'+dataset_name+'_outputs.csv')
-
-
-                    if os.path.exists(outputfile):
-                        continue
                         
                     with h5py.File(clsfile, 'r') as file:
                         cls = np.array(file['cls'][:])
@@ -996,7 +997,6 @@ class classification_thread(threading.Thread):
 
                     dataframe.to_csv(outputfile)
 
-                    #print(f'finished inferring {outputfile}')
 
             
           
@@ -1138,10 +1138,6 @@ def fill_colors(frame):
 eel.init('frontend')
 eel.browsers.set_path('electron', 'node_modules/electron/dist/electron')
 
-@eel.expose 
-def switch_infer():
-    global toggle_infer
-    toggle_infer = not toggle_infer
 
 @eel.expose 
 def get_progress_update():
@@ -1189,6 +1185,8 @@ def project_exists(project_directory):
 
 @eel.expose
 def create_project(parent_directory, project_name):
+    
+    global recordings
 
     # main project directory
     project = os.path.join(parent_directory, project_name)
