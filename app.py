@@ -82,10 +82,23 @@ class Actogram:
             else:
                 self.cycles.append(False)
 
+        clocklab_time = "{:02d}".format(int(self.start)) + ":" + "{:02d}".format(int(60*(self.start - int(self.start))))
+
+        clocklab_file = [self.behavior, '01-jan-2024', clocklab_time, self.binsize/self.framerate/60*4, 0, 0, 0]
+
         bins = []
 
         for b in range(0, len(self.totalts), self.binsize):
             bins.append((sum(np.array(self.totalts[b:b+self.binsize]) >= self.threshold), b/self.framerate/3600))
+            clocklab_file.append(sum(np.array(self.totalts[b:b+self.binsize]) >= self.threshold))
+
+        df = pd.DataFrame(data=np.array(clocklab_file))
+
+        self.clfile = os.path.join(self.directory, self.model+'-'+self.behavior+'-'+'clocklab.csv')
+
+        df.to_csv(self.clfile, header=False, index=False)
+
+        os.rename(self.clfile, self.clfile.replace('.csv', '.awd'))
 
         self.timeseries_data = bins
 
