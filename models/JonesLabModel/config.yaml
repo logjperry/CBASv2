@@ -1,0 +1,12 @@
+behaviors:
+- eating
+- drinking
+- rearing
+- climbing
+- digging
+- nesting
+- resting
+- grooming
+- exploration
+seq_len: 31
+model: "./models/JonesLabModel/model.pth"

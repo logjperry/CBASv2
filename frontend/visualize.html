@@ -46,13 +46,25 @@
 
             </div>
             <div id="actogram" style="width: 500px; max-height: max-content;" >
-                <div class="d-flex col" style="justify-content: space-between;">
-                    <h6 class="text-light" style="padding:5px">Framerate: </h6>
-                    <input type="number" class="form-control" id="vs-framerate" aria-describedby="directory" value="10" style="padding:5px; height: 30px; width:60px"  step="1" min="1" max="90" onchange="adjustActogram()">
-                    <h6 class="text-light" style="padding:5px">Bin Size: </h6>
+                <div class="d-flex col" style="justify-content: left;">
+                    <h6 class="text-light" style="padding:5px; width:100px; padding-left:10px">Framerate: </h6>
+                    <input type="number" class="form-control" id="vs-framerate" aria-describedby="directory" value="10" style="padding:5px; height: 30px; width:60px;"  step="1" min="1" max="90" onchange="adjustActogram()">
+                    <h6 class="text-light" style="padding:5px; width:100px; padding-left:10px">Bin Size: </h6>
                     <input type="number" class="form-control" id="vs-binsize" aria-describedby="directory" value="10" style="padding:5px; height: 30px; width:60px"  step="1" min="1" max="720" onchange="adjustActogram()">
-                    <h6 class="text-light" style="padding:5px">Start Time: </h6>
+                    <h6 class="text-light" style="padding:5px; width:100px; padding-left:10px">Start Time: </h6>
                     <input type="number" class="form-control" id="vs-start" aria-describedby="directory" value="0" style="padding:5px; height: 30px; width:60px"  step="0.01" min="0" max="24" onchange="adjustActogram()">
+                </div>
+                <div class="d-flex col" style="justify-content: left;">
+                    <h6 class="text-light" style="padding:5px; width:100px; padding-left:10px">Color: </h6>
+                    <input type="color" class="form-control" id="vs-color" aria-describedby="directory" value="#000000" style="padding:5px; height: 30px; width:60px" onchange="adjustActogram()">
+                    <h6 class="text-light" style="padding:5px; width:100px; padding-left:10px">Threshold: </h6>
+                    <input type="number" class="form-control" id="vs-threshold" aria-describedby="directory" value="1" style="padding:5px; height: 30px; width:60px"  step="1" min="1" max="100" onchange="adjustActogram()">
+                    <h6 class="text-light" style="padding:5px; width:100px; padding-left:10px">Norm: </h6>
+                    <input type="number" class="form-control" id="vs-norm" aria-describedby="directory" value="6000" style="padding:5px; height: 30px; width:60px"  step="1" min="1" max="18000" onchange="adjustActogram()">
+                </div>
+                <div class="d-flex col" style="justify-content: left;">
+                    <h6 class="text-light" style="padding:5px; width:100px; padding-left:10px">Light Cycle: </h6>
+                    <input type="text" class="form-control" id="vs-lcycle" aria-describedby="directory" value="1" style="padding:5px; height: 30px; width:220px" onchange="adjustActogram()">
                 </div>
                 <img id="actogram-image" src="" alt="" style="display: none;">
             </div>
@@ -156,16 +168,24 @@
                 let fr = document.getElementById('vs-framerate').value
                 let bs = document.getElementById('vs-binsize').value
                 let st = document.getElementById('vs-start').value
+                let col = document.getElementById('vs-color').value
+                let th = document.getElementById('vs-threshold').value
+                let norm = document.getElementById('vs-norm').value
+                let lc = document.getElementById('vs-lcycle').value
 
-                eel.make_actogram(rd, sd, md, beh, fr, bs, st)
+                eel.make_actogram(rd, sd, md, beh, fr, bs, st, col, th, norm, lc)
             }
 
             function adjustActogram() {
                 let fr = document.getElementById('vs-framerate').value
                 let bs = document.getElementById('vs-binsize').value
                 let st = document.getElementById('vs-start').value
+                let col = document.getElementById('vs-color').value
+                let th = document.getElementById('vs-threshold').value
+                let norm = document.getElementById('vs-norm').value
+                let lc = document.getElementById('vs-lcycle').value
 
-                eel.adjust_actogram(fr, bs, st)
+                eel.adjust_actogram(fr, bs, st, col, th, norm, lc)
 
             }
   
@@ -187,7 +207,6 @@
                         
                         let rd = root_dirs[i]
                         html += `
-                            <div > 
                                 <h3 class='text-light' onclick="toggleVis('rd`+rd+`')" style="cursor:pointer;">`+rd+`
                                 </h3>`
 
@@ -199,7 +218,6 @@
                         for(j=0;j<sub_dirs.length;j++) {
                             let sd = sub_dirs[j]
                             html += `
-                                <div > 
                                     <h4 class='text-light' onclick="toggleVis('rd`+rd+`sd`+sd+`')" style="cursor:pointer;padding-left:10px">`+sd+`
                                     </h4>`
 
@@ -212,7 +230,6 @@
                                 let model = models[m]
                                 
                                 html += `
-                                    <div > 
                                         <h5 class='text-light' onclick="toggleVis('rd`+rd+`sd`+sd+`md`+model+`')" style="cursor:pointer;padding-left:20px">`+model+`
                                         </h5>`
 
@@ -241,16 +258,15 @@
                             }
                             
                             html +=`
-                                </div>
                             </div>
                                 `
                         }
 
                         html +=`
-                            </div>
                         </div>
                             `
                     }
+
 
                     directories.innerHTML = html
 
@@ -273,3 +289,5 @@
   
       </body>
   </html>
+
+

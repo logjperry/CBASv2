@@ -103,21 +103,21 @@
                         <div class="row justify-content-center align-items-center g-2">
                             <div class="col">
                                 <p>Sequence Length: </p>
-                                <input type="number" class="form-control" id="tm-seqlen" aria-describedby="directory" placeholder="31" step="2" min="5" max="127">
+                                <input type="number" class="form-control" id="tm-seqlen" aria-describedby="directory" value="31" placeholder="31" step="2" min="5" max="127">
                             </div>
                             <div class="col">
                                 <p>Batch Size: </p>
-                                <input type="number" class="form-control" id="tm-batchsize" aria-describedby="directory" placeholder="512" step="32" min="32" max="2048">
+                                <input type="number" class="form-control" id="tm-batchsize" aria-describedby="directory" value="512" placeholder="512" step="32" min="32" max="2048">
                             </div>
                         </div>
                         <div class="row justify-content-center align-items-center g-2">
                             <div class="col">
                                 <p>Learning Rate: </p>
-                                <input type="number" class="form-control" id="tm-lrate" aria-describedby="directory" placeholder="0.0001" step=".0001" min="0" max="1">
+                                <input type="number" class="form-control" id="tm-lrate" aria-describedby="directory" value="0.0001" placeholder="0.0001" step=".0001" min="0" max="1">
                             </div>
                             <div class="col">
                                 <p>Epochs: </p>
-                                <input type="number" class="form-control" id="tm-epochs" aria-describedby="directory" placeholder="10" step="1" min="1" max="100">
+                                <input type="number" class="form-control" id="tm-epochs" aria-describedby="directory" value="10" placeholder="10" step="1" min="1" max="100">
                             </div>
                         </div>
                     </div>
@@ -152,6 +152,7 @@
         <div id="datasets" style="display: block;">
             <div class="container align-items-center justify-content-center">
                 <div class="col" id="dataset-container">
+
                     
                 </div>
             </div>
@@ -245,7 +246,15 @@
 
                 let container = document.getElementById('dataset-container')
 
-                container.innerHTML = ""
+                container.innerHTML = `
+                <div class="row-auto"  style="padding:15px">
+                  <div class="card shadow text-light bg-light" style="width: 700px; height:max-content;border-radius:1px;">
+                      <div class="card-header bg-dark" style="border-radius:1px;">
+                          <h1 class="display-6"> JonesLabModel </h1>
+                          <button class="btn btn-outline-warning position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="showInferenceModal('JonesLabModel')">Infer</button>
+                      </div>
+                  </div>
+                </div>`
 
                 let names = Object.keys(data)
                 let sets = data
@@ -260,29 +269,31 @@
 
                     let mheaders = ['Train #', 'Test #', 'Precision','Recall', 'F1 Score']
 
-					let html = `
-                    <div class="row-auto"  style="padding:15px">
+                    let html = `
+
+                              <div class="row-auto"  style="padding:15px">
+                                  <div class="card shadow text-light bg-light" style="width: 700px; height:max-content;">
+                                      <div class="card-header bg-dark">
+                                          <h1 class="display-6">` + name +`</h1>
+                                          <button class="btn btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:105px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
+                                          <button class="btn btn-outline-success position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="makeTrainModal('`+name+`')">Train</button>
+                                      </div>
+                              ` 
+
+
+                    if(sets[n]['model'] != null) {
+                      html = `
+
+                      <div class="row-auto"  style="padding:15px">
                         <div class="card shadow text-light bg-light" style="width: 700px; height:max-content;">
-                            <div class="card-header bg-dark">
-                                <h1 class="display-6">` + name +`</h1>
-                                <button class="btn btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:105px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
-                                <button class="btn btn-outline-success position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="makeTrainModal('`+name+`')">Train</button>
-                            </div>
-                    ` 
-
-
-					if(sets[n]['model'] != null) {
-						html = `
-						<div class="row-auto"  style="padding:15px">
-							<div class="card shadow text-light bg-light" style="width: 700px; height:max-content;">
-								<div class="card-header bg-dark">
-									<h1 class="display-6">` + name +`</h1>
-									<button class="btn btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:195px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
-									<button class="btn btn-outline-success position-absolute top-0 end-0" style='width:80px;margin-right:105px;margin-top:15px' type="submit" onclick="makeTrainModal('`+name+`')">Train</button>
-									<button class="btn btn-outline-warning position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="showInferenceModal('`+name+`')">Infer</button>
-								</div>
-						` 
-					}
+                          <div class="card-header bg-dark">
+                            <h1 class="display-6">` + name +`</h1>
+                            <button class="btn btn-outline-primary position-absolute top-0 end-0" style='width:80px;margin-right:195px;margin-top:15px' type="submit" onclick="labelModal('`+name+`')">Label</button>
+                            <button class="btn btn-outline-success position-absolute top-0 end-0" style='width:80px;margin-right:105px;margin-top:15px' type="submit" onclick="makeTrainModal('`+name+`')">Train</button>
+                            <button class="btn btn-outline-warning position-absolute top-0 end-0" style='width:80px;margin-right:15px;margin-top:15px' type="submit" onclick="showInferenceModal('`+name+`')">Infer</button>
+                          </div>
+                      ` 
+                    }
 
                     
 
@@ -695,7 +706,12 @@
 					}
 				}
 
-				eel.start_classification(read('data_sets'), dataset, recordings)
+        if(dataset=='JonesLabModel') {
+            eel.start_classification('./models', dataset, recordings)
+        } else {
+            eel.start_classification(read('data_sets'), dataset, recordings)
+        }
+
 
 				inferenceModal.hide()
 				inferenceModal = new bootstrap.Modal(document.getElementById('inferenceModal'))

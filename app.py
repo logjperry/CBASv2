@@ -52,13 +52,17 @@ def remove_leading_zeros(num):
 
 class Actogram:
 
-    def __init__(self, directory, model, behavior, framerate, start, binsize, width=500, height=500):
+    def __init__(self, directory, model, behavior, framerate, start, binsize, color, threshold, norm, lightcycle, width=500, height=500):
 
         self.directory = directory
         self.model = model
         self.behavior = behavior
         self.framerate = framerate
         self.start = start
+        self.color = color 
+        self.threshold = threshold
+        self.norm = norm
+        self.lightcycle = lightcycle
 
         self.width = width
         self.height = height
@@ -71,12 +75,23 @@ class Actogram:
 
     def draw(self):
 
+        self.cycles = []
+        for c in self.lightcycle:
+            if c=='1':
+                self.cycles.append(True)
+            else:
+                self.cycles.append(False)
+
         bins = []
 
         for b in range(0, len(self.totalts), self.binsize):
-            bins.append((sum(self.totalts[b:b+self.binsize]), b/self.framerate/3600))
+            bins.append((sum(np.array(self.totalts[b:b+self.binsize]) >= self.threshold), b/self.framerate/3600))
 
         self.timeseries_data = bins
+
+        if len(bins)<2:
+            print('Not enough videos to make an actogram.')
+            return
 
         surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.width, self.height)
         ctx = cairo.Context(surface)
@@ -138,7 +153,6 @@ class Actogram:
         ts = np.array([a[0] for a in tsdata])
         times = np.array([a[1]+self.start for a in tsdata])
 
-        color = (0,0,0)
 
         for d in range(total_days):
 
@@ -162,13 +176,14 @@ class Actogram:
 
             # normalize the series
             series = np.array(series)
-            series = series/np.max(series)
+            series = series/self.norm
 
             series = series*.90
 
-            LD = True
-            # if cycles is not None:
-            #     LD = cycles[i]
+            if self.cycles is not None and d<len(self.cycles):
+                LD = self.cycles[d]
+            else:
+                LD = True
 
             if LD:
                 ctx.set_source_rgb(223/255,223/255,223/255)
@@ -226,11 +241,6 @@ class Actogram:
 
     def timeseries(self):
 
-        cm = Colormap('seaborn:tab20')
-
-        binsize = self.binsize
-        framerate = self.framerate
-
         behavior = self.behavior
 
         valid_files = [(os.path.join(self.directory, file), remove_leading_zeros(file.split('_')[1]))  for file in os.listdir(self.directory) if file.endswith('.csv') and '_'+self.model+'_' in file]
@@ -261,15 +271,16 @@ class Actogram:
 
                 col_index = behaviors.index(behavior)
 
-                color = str(cm(tab20_map(col_index))).lstrip('#')
-                self.color = np.flip(np.array([int(color[i:i+2], 16) for i in (0, 2, 4)]))
 
-            onehot = np.argmax(dataframe[behaviors].to_numpy(), axis=1) == col_index
+            top = np.argmax(dataframe[behaviors].to_numpy(), axis=1) == col_index
+            values = np.max(dataframe[behaviors].to_numpy(), axis=1)
+
+            values = top * values
 
             if continuous:
                 frames = dataframe[behavior].to_list()
             else:
-                frames = onehot
+                frames = values
 
             self.totalts.extend(frames)
 
@@ -910,7 +921,13 @@ class classification_thread(threading.Thread):
 
                 model = torch.load(self.model_path)
 
-                model.eval()
+                try:
+                    model.eval()
+                except:
+                    state_dict = model
+                    model = classifier(in_features=768, out_features=len(behaviors), seq_len=seq_len)
+                    model.load_state_dict(state_dict=state_dict)
+                    model.eval()
 
                 model.to(device)
 
@@ -1216,7 +1233,7 @@ def create_project(parent_directory, project_name):
     return True, {'project':project, 'cameras':cameras, 'recordings':recordings, 'models':models, 'data_sets':data_sets}
 
 @eel.expose
-def make_actogram(root, sub_dir, model, behavior, framerate, binsize, start):
+def make_actogram(root, sub_dir, model, behavior, framerate, binsize, start, color, threshold, norm, lightcycle):
 
     global actogram
 
@@ -1224,16 +1241,24 @@ def make_actogram(root, sub_dir, model, behavior, framerate, binsize, start):
     binsize = int(binsize)*framerate*60
     start = float(start)
 
+    threshold = float(threshold)/100
+    color = str(color.lstrip('#'))
+    color = np.array([int(color[i:i+2], 16) for i in (0, 2, 4)])
+
     directory = os.path.join(recordings, root, sub_dir)
 
-    actogram = Actogram(directory, model, behavior, framerate, start, binsize, width=500, height=500)
+    actogram = Actogram(directory, model, behavior, framerate, start, binsize, color, threshold, int(norm), lightcycle, width=500, height=500)
 
 @eel.expose
-def adjust_actogram(framerate, binsize, start):
+def adjust_actogram(framerate, binsize, start, color, threshold, norm, lightcycle):
 
     framerate = int(framerate)
     binsize = int(binsize)*framerate*60
     start = float(start)
+    
+    threshold = float(threshold)/100
+    color = str(color.lstrip('#'))
+    color = np.array([int(color[i:i+2], 16) for i in (0, 2, 4)])
 
     global actogram
 
@@ -1241,6 +1266,10 @@ def adjust_actogram(framerate, binsize, start):
         actogram.framerate = framerate
         actogram.binsize = binsize
         actogram.start = start
+        actogram.color = color 
+        actogram.threshold = threshold
+        actogram.norm = int(norm)
+        actogram.lightcycle = lightcycle
 
         actogram.draw()
 
