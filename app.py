@@ -98,6 +98,11 @@ class Actogram:
 
         df.to_csv(self.clfile, header=False, index=False)
 
+        awdfile = self.clfile.replace('.csv', '.awd')
+
+        if os.path.exists(awdfile):
+            os.remove(awdfile)
+
         os.rename(self.clfile, self.clfile.replace('.csv', '.awd'))
 
         self.timeseries_data = bins
