@@ -8,28 +8,28 @@
 ## Laser cut parts
 | Part | Purpose | Needed Per Cage | Notes |
 |:---| :--- |:---|:--- |
-|Cage_Blank_Wall.svg| Side wall | 2 | White acrylic, 0.22" |
-|Cage_Water_Wall.svg| Water hopper wall | 1 | Clear acrylic, 0.22" |
-|Cage_Lid_No_Hole.svg | Lid | 1 | Clear acrylic, 0.118" |
-| Cage_Food_Wall.svg | Food hopper wall | 1 | Clear acrylic, 0.22" |
-| Cage_Floor.svg| Floor | 1 | White acrylic, 0.22" |
+|[Cage_Blank_Wall.svg](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Cage_Blank_Wall.svg)| Side wall | 2 | White acrylic, 0.22" |
+|[Cage_Water_Wall.svg](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Cage_Water_Wall.svg)| Water hopper wall | 1 | Clear acrylic, 0.22" |
+|[Cage_Lid_No_Hole.svg](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Cage_Lid_No_Hole.svg) | Lid | 1 | Clear acrylic, 0.118" |
+| [Cage_Food_Wall.svg](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Cage_Food_Wall.svg) | Food hopper wall | 1 | Clear acrylic, 0.22" |
+| [Cage_Floor.svg](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Cage_Floor.svg)| Floor | 1 | White acrylic, 0.22" |
 
 ## Laser cut parts (optional)
 | Part | Purpose | Needed Per Cage | Notes |
 |:---| :--- |:---|:--- |
-|Cage_Wheel_Wall.svg| Side wall for running wheel | 1 | White acrylic, 0.22" |
-|Cage_Lid_Hole.svg| Lid with hole for cable | 1 | Clear acrylic, 0.118" |
+|[Cage_Wheel_Wall.svg](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Cage_Wheel_Wall.svg)| Side wall for running wheel | 1 | White acrylic, 0.22" |
+|[Cage_Lid_Hole.svg](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Cage_Lid_Hole.svg)| Lid with hole for cable | 1 | Clear acrylic, 0.118" |
 
 ## 3D printed parts
 | Part | Purpose | Needed Per Cage | Notes |
 |:---| :--- |:---|:--- |
-|Mouse_Bottle_Holder.stl| Water hopper | 1 | PLA, 0.2mm layer height, 15% infill |
-|Food_Hopper_No_Bars.stl| Food hopper | 1 | PLA, 0.2mm layer height, 15% infill|
+|[Mouse_Bottle_Holder.stl](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Mouse_Bottle_Holder.stl)| Water hopper | 1 | PLA, 0.2mm layer height, 15% infill |
+|[Food_Hopper_No_Bars.stl](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Food_Hopper_No_Bars.stl)| Food hopper | 1 | PLA, 0.2mm layer height, 15% infill|
 
 ## 3D printed parts (optional)
 | Part | Purpose | Needed Per Cage | Notes |
 |:---| :--- |:---|:--- |
-|Mouse_Running_Wheel.3mf| Running wheel | 1 | PLA, 0.2mm layer height, 15% infill |
+|[Mouse_Running_Wheel.3mf](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/Mouse_Running_Wheel.3mf)| Running wheel | 1 | PLA, 0.2mm layer height, 15% infill |
 
 ## Cage posts
 | Part | Purpose | Needed Per Cage | Notes |
@@ -59,7 +59,7 @@ To epoxy the 3D printed parts:
 | Hookup wire | IR power supply | 3' per cage | [Amazon Link](https://www.amazon.com/TYUMEN-Electrical-Extension-Flexible-Lighting/dp/B07DDG7J9K) |
 | Female 12V DC power jack adapter| IR power supply | 1 per cage| [Amazon Link](https://www.amazon.com/Ksmile%C2%AE-Female-2-1x5-5mm-Adapter-Connector/dp/B015OCV5Y8/r) |
 | 850 nm IR light stripping| IR illumination | 1' per cage | [Amazon Link](https://www.amazon.com/SMD3528-300-IR-Infrared-Flexible-8mm-Wide-Non-Waterproof/dp/B099N8WPRL)|
-|IR_Light_Cage_Top.stl| Attach IR to cage | 1 per cage | PLA, 0.2mm layer height, 15% infill|
+|[IR_Light_Cage_Top.stl](https://github.com/jones-lab-tamu/CBASv2/blob/main/parts/IR_Light_Cage_Top.stl)| Attach IR to cage | 1 per cage | PLA, 0.2mm layer height, 15% infill|
 
 <p align="left">
     <img src=".//assets/ir_lid.png" alt="Camera diagram" style="width: 300px; height: auto;">
