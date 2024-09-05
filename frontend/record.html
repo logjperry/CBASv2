@@ -314,11 +314,14 @@
                     console.log('pinging cameras...')
                 })
 
+                eel.setup_live_cameras(read('cameras'))().then( function(data) {
+                    console.log('setting up live camera streams...')
+                })
+
                 let cover = document.getElementById('cover-spin')
                 cover.style.visibility = 'visible'
 
                 setTimeout(function (){
-                    eel.update_camera_frames(read('cameras'))()
                     cover.style.visibility = 'hidden'
                 }, 5000);
 
@@ -337,10 +340,8 @@
                 cover.style.visibility = 'visible'
 
                 setTimeout(function (){
-                    eel.update_camera_frames(read('cameras'))()
                     cover.style.visibility = 'hidden'
                 }, 5000);
-
             }
 
             function drawImageScaled(img, ctx, sx, sy, sw, sh, resolution) {
@@ -581,8 +582,8 @@
             }
 
             setInterval(function (){
-                eel.update_camera_frames(read('cameras'))
-            }, 1000)
+                eel.update_live_cameras();
+            }, 1000 / 10)
 
             window.setInterval(function (){
                 eel.get_progress_update()

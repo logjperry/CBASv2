@@ -10,6 +10,7 @@ from sys import exit
 import subprocess
 import shutil
 import cairo
+import ffmpeg
 
 import cv2
 
@@ -1052,9 +1053,78 @@ class classification_thread(threading.Thread):
             ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
             print('Exception raise failure')
 
+
+class live_monitor_thread(threading.Thread):
+    def __init__(self, rtsp_urls, image_width, image_height, fps):
+        threading.Thread.__init__(self)
+
+        self.rtsp_urls = rtsp_urls
+        self.fps = fps
+        self.image_width = image_width
+        self.image_height = image_height
+        self.frame_size = self.image_width * self.image_height * 3
+
+    def run(self):
+        global latest_live_frames
+        procs = []
+
+        for url in self.rtsp_urls:
+            proc = (
+                ffmpeg
+                .input(url, rtsp_transport='tcp')
+                .filter('fps', fps=self.fps)
+                .filter('scale', self.image_width, self.image_height)
+                .output('pipe:', format='rawvideo', pix_fmt='bgr24')
+                .run_async(pipe_stdout=True, pipe_stderr=True, quiet=True, overwrite_output=True)
+            )
+
+            procs.append((proc, url))
+
+            latest_live_frames[url] = None
+            
+        while True:
+            for proc, url in procs:
+                raw_frame = proc.stdout.read(self.frame_size)
+                if len(raw_frame) == self.frame_size:
+                    latest_frame = np.frombuffer(raw_frame, np.uint8).reshape((self.image_height, self.image_width, 3))
+                else:
+                    latest_frame = None
+
+                latest_live_frames[url] = latest_frame
+
+    def get_id(self):
+        # returns id of the respective thread
+        if hasattr(self, '_thread_id'):
+            return self._thread_id
+        for id, thread in threading._active.items():
+            if thread is self:
+                return id
+
+    def raise_exception(self):
+        thread_id = self.get_id()
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
+              ctypes.py_object(SystemExit))
+        if res > 1:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+            print('Exception raise failure')
+
 thread = inference_thread('inference')
 
 tthread = None
+
+# Live video monitor config stuff.  It is pretty arbitrary right now.
+live_image_width = 320
+live_image_height = 240
+live_fps = 10
+
+# This is a map from RTPS URL to the a numpy byte array with our image.
+latest_live_frames = {}
+
+# The thread that queries ffmpeg for the latest images.
+monitor_thread = None
+
+# Maps a camera name to a url pair.
+camera_url_pairs = []
 
 def tab20_map(val):
 
@@ -1445,6 +1515,43 @@ def start_classification(datasets, dataset, whitelist):
 
             classification_threads.append(cthread)
 
+@eel.expose
+def setup_live_cameras(camera_directory):
+    global camera_url_pairs
+    global monitor_thread
+
+    rtsp_urls = []
+    for camera in os.listdir(camera_directory):
+        if os.path.isdir(os.path.join(camera_directory, camera)):
+            config = os.path.join(camera_directory, camera, 'config.yaml')
+
+            with open(config, 'r') as file:
+                cconfig = yaml.safe_load(file)
+
+            url = cconfig['rtsp_url']
+            rtsp_urls.append(url)
+
+            camera_url_pairs.append((camera, url))
+
+    monitor_thread = live_monitor_thread(rtsp_urls, live_image_width, live_image_height, live_fps)
+    monitor_thread.start()
+
+@eel.expose
+def update_live_cameras():
+    global latest_live_frame
+    global camera_url_pairs
+    for camera, url in camera_url_pairs:
+        if url not in latest_live_frames or latest_live_frames[url] is None:
+            continue
+        latest_frame = latest_live_frames[url]
+        _, frame = cv2.imencode('.jpg', latest_frame)
+
+        frame = frame.tobytes()
+
+        blob = base64.b64encode(frame)
+        blob = blob.decode("utf-8")
+
+        eel.updateImageSrc(camera, blob)()
 
 @eel.expose
 def ping_cameras(camera_directory):
@@ -1481,6 +1588,7 @@ def ping_cameras(camera_directory):
 
 @eel.expose
 def update_camera_frames(camera_directory):
+    print("updating camera frames")
 
     for camera in os.listdir(camera_directory):
         if os.path.isdir(os.path.join(camera_directory, camera)):
@@ -1989,6 +2097,9 @@ def kill_streams():
     stop_threads = True
     thread.raise_exception()
     thread.join()
+
+    monitor_thread.raise_exception()
+    monitor_thread.join()
 
     if tthread:
         tthread.raise_exception()
