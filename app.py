@@ -1082,9 +1082,6 @@ class live_monitor_thread(threading.Thread):
             
         while True:
             for camera in live_monitor_cameras:
-                if not 'enabled' in live_monitor_cameras[camera]:
-                    print("skip")
-
                 if not 'enabled' in live_monitor_cameras[camera] or not live_monitor_cameras[camera]['enabled']:
                     continue
 
@@ -1541,15 +1538,10 @@ def setup_live_cameras(camera_directory):
 
             live_monitor_cameras[camera]['url'] = url
             live_monitor_cameras[camera]['latest_frame'] = None
-            print(cconfig['live_monitor'])
             live_monitor_cameras[camera]['enabled'] = cconfig['live_monitor']
 
     monitor_thread = live_monitor_thread(live_image_width, live_image_height, live_fps)
     monitor_thread.start()
-
-@eel.expose
-def doprint(x):
-    print(x)
 
 @eel.expose
 def update_live_cameras():
@@ -1606,8 +1598,6 @@ def ping_cameras(camera_directory):
 
 @eel.expose
 def update_camera_frames(camera_directory):
-    print("updating camera frames")
-
     for camera in os.listdir(camera_directory):
         if os.path.isdir(os.path.join(camera_directory, camera)):
 
@@ -1693,7 +1683,6 @@ def update_camera(camera_directory, name, rtsp_url, framerate=10, resolution=256
             cconfig['crop_height'] = crop_height
             cconfig['live_monitor'] = live_monitor
 
-            print("this", live_monitor)
             live_monitor_cameras[name]['enabled'] = live_monitor
 
             # save the camera config
